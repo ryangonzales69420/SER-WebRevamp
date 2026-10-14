@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">
+  <title>SER Blocks</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Google Sans Flex", Inter, "Segoe UI", sans-serif;
+      --background: #181818;
+      --panel: #181818;
+      --panel-raised: #202430;
+      --panel-soft: #1b1e26;
+      --border: #2a2e38;
+      --border-strong: #3a404d;
+      --text: #f7f8fb;
+      --muted: #aab1c0;
+      --accent-strong: hsl(113, 76%, 77%);
+      --danger: #ff7c87;
+      --warning: #f2d07c;
+      --primary-purple: #695be0;
+      --secondary-purple: #2c2852;
+      --bright-purple: #ddd9ff;
+      --toolbar-height: 66px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--background); color: var(--text); }
+    body { display: flex; flex-direction: column; }
+    button, input, textarea, select { font: inherit; transition-duration: .1s; }
+    button, input[type="text"], input[type="search"] {
+      min-height: 40px; border: 1px solid var(--border); border-radius: 2px; color: var(--text);
+    }
+    button { padding: 0 14px; background: var(--panel-raised); cursor: pointer; font-weight: 650; display: inline-flex; align-items: center; gap: 8px; }
+    button:hover:not(:disabled) { border-color: var(--border-strong); background: #2b303c; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible, .diag-btn:focus-visible {
+      outline: 3px solid var(--accent-strong); outline-offset: 2px;
+    }
+    .fa-solid, .fa-brands { width: 1.1em; text-align: center; }
+    .ser-icon { font-family: "Font Awesome 6 Free"; font-weight: 900; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    .toolbar {
+      min-height: var(--toolbar-height); display: flex; align-items: center; gap: 9px; padding: 10px 14px;
+      border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; margin-right: 10px; white-space: nowrap; }
+    .brand-icon { font-size: 22px; color: var(--bright-purple); }
+    .brand strong, .brand small { display: block; }
+    .brand strong { font-size: 15px; letter-spacing: -0.01em; }
+    .brand small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .toolbar-spacer { flex: 1; }
+    .toolbar-button { min-height: 38px; }
+    .icon-only { padding: 0 11px; }
+    .accent-button { border-color: var(--primary-purple); background: var(--secondary-purple); color: var(--bright-purple); }
+    .primary-button { min-height: 42px; border-color: #7567ea; background: #6657dc; box-shadow: 0 7px 18px rgb(78 64 202 / 22%); }
+    .primary-button:hover:not(:disabled) { border-color: #a99eff; background: #7768eb; }
+    kbd { padding: 1px 6px; border: 1px solid var(--border-strong); border-radius: 4px; background: #101217; color: var(--muted); font: 11px "Cascadia Code", Consolas, monospace; }
+
+    .filename-field { display: grid; gap: 2px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    #scriptName { width: 170px; min-height: 31px; padding: 0 10px; background: var(--background); font-size: 13px; letter-spacing: normal; text-transform: none; }
+
+    .app-shell { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(480px, 1fr) minmax(320px, 400px); }
+    #main { min-width: 0; min-height: 0; position: relative; border-right: 1px solid var(--border); }
+    #blocklyDiv { width: 100%; height: 100%; }
+    .blocklyToolboxDiv { border-right: 1px solid var(--border); }
+    .blocklyTreeRow { height: 40px; margin-bottom: 3px; padding: 0 10px !important; border-radius: 0 8px 8px 0; line-height: 40px; }
+    .blocklyTreeLabel { font-family: Inter, "Segoe UI", sans-serif; font-size: 13px; font-weight: 650; }
+    .blocklyFlyoutLabelText { fill: #c7ccd8 !important; font-size: 12px !important; font-weight: 700; }
+    .blocklyToolboxCategory { padding-left: 0; pointer-events: auto; border-left: 8px solid rgb(91, 140, 165); transition-duration: .1s; }
+    .ser-cat-icon { display: inline-block; width: 22px; margin-right: 6px; font: 900 13px/1 "Font Awesome 6 Free"; text-align: center; color: var(--bright-purple); }
+    .ser-cat-start::before { content: "\f04b"; }
+    .ser-cat-players::before { content: "\f0c0"; }
+    .ser-cat-messages::before { content: "\f4ad"; }
+    .ser-cat-world::before { content: "\f1ad"; }
+    .ser-cat-logic::before { content: "\f1ec"; }
+    .ser-cat-variables::before { content: "\f02b"; }
+    .ser-cat-server::before { content: "\f233"; }
+    .ser-cat-libraries::before { content: "\f02d"; }
+    .ser-cat-icon { font-family: "Font Awesome 6 Free"; font-weight: 900; }
+
+    .empty-workspace-button {
+      position: absolute; left: 50%; bottom: 24px; z-index: 10; transform: translateX(-50%);
+      border-color: #6154cb; background: rgb(38 34 72 / 94%); color: #e6e2ff; box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
+    }
+    .empty-workspace-button[hidden] { display: none; }
+
+    #sidebar { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto 1fr; overflow: hidden; background: var(--panel); }
+    .sidebar-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--border); }
+    .sidebar-tab {
+      min-height: 46px; padding: 0 12px; border: 0; border-radius: 0; border-bottom: 2px solid transparent;
+      background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; justify-content: center;
+    }
+    .sidebar-tab:hover:not(.is-active) { background: rgb(255 255 255 / 4%); color: var(--text); }
+    .sidebar-tab.is-active { border-bottom-color: var(--primary-purple); color: var(--bright-purple); background: var(--secondary-purple); }
+    .sidebar-body { position: relative; min-height: 0; }
+    .sidebar-panel { position: absolute; inset: 0; display: none; overflow: auto; }
+    .sidebar-panel.is-active { display: block; }
+    .sidebar-panel[data-panel="code"].is-active { display: grid; grid-template-rows: auto minmax(160px, 1fr) auto; overflow: hidden; }
+
+    .lesson-panel, .output-panel, .diagnostics-panel, .guide-block { padding: 16px; border-bottom: 1px solid var(--border); }
+    .eyebrow { margin: 0 0 6px; color: #9b91f2; font-size: 10px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .lesson-head { display: flex; align-items: center; gap: 10px; }
+    .lesson-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--secondary-purple); color: var(--bright-purple); font-size: 16px; flex-shrink: 0; }
+    .lesson-panel h2, .section-heading h2, .guide-block h2 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
+    .lesson-panel > p:not(.eyebrow) { margin: 9px 0 0; color: #d5d9e3; font-size: 13px; line-height: 1.48; }
+    .lesson-tip { padding: 9px 10px; border-left: 3px solid var(--primary-purple); border-radius: 0 6px 6px 0; background: rgb(139 124 246 / 9%); color: var(--muted) !important; font-size: 12px !important; }
+    .lesson-tip:empty { display: none; }
+
+    .output-panel { min-height: 0; display: flex; flex-direction: column; border-bottom: 0; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+    .small-button, .icon-button { min-height: 32px; padding: 0 10px; font-size: 12px; }
+    #codeOutput {
+      min-height: 0; flex: 1; width: 100%; padding: 10px; resize: none; border: 1px solid #2d323e; border-radius: 9px 9px 0 0;
+      outline: 0; background: #101217; color: #e8eaf0; font: 12px/1.55 "Cascadia Code", Consolas, monospace; tab-size: 4;
+    }
+    .diagnostics-panel { max-height: 260px; overflow: auto; background: #171a21; }
+    #statusBadge { border-radius: 999px; padding: 4px 9px; background: #303540; color: var(--muted); font-size: 11px; font-weight: 750; }
+    #statusBadge[data-state="valid"] { background: #173c2b; color: #8fe7b8; }
+    #statusBadge[data-state="warning"] { background: #473719; color: var(--warning); }
+    #statusBadge[data-state="error"] { background: #4a2228; color: #ff9da6; }
+    #diagnostics { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    #diagnostics li { display: flex; gap: 9px; align-items: flex-start; color: #d2d6df; font-size: 12px; line-height: 1.4; }
+    #diagnostics li > i { margin-top: 2px; }
+    .diag-btn { min-height: 0; padding: 4px 6px; margin: -4px -6px; border: 0; background: transparent; color: inherit; text-align: left; font-size: 12px; font-weight: 500; }
+    .diag-btn:hover:not(:disabled) { background: rgb(255 255 255 / 5%); }
+    .diag-btn:disabled { opacity: 1; cursor: default; }
+    .sev-error { color: var(--danger); }
+    .sev-warning { color: var(--warning); }
+    .sev-success { color: var(--accent-strong); }
+
+    .guide-block { padding: 16px; }
+    .guide-block p { margin: 8px 0 0; color: #d5d9e3; font-size: 13px; line-height: 1.5; }
+    .guide-block ol, .guide-block ul { margin: 8px 0 0; padding-left: 20px; color: #d5d9e3; font-size: 12.5px; line-height: 1.55; }
+    .guide-block li { margin-bottom: 5px; }
+    .guide-block code { padding: 1px 5px; border-radius: 3px; background: #101217; color: #c8c0ff; font: 11.5px "Cascadia Code", Consolas, monospace; }
+    .guide-block strong { color: var(--bright-purple); font-weight: 700; }
+    .guide-links { list-style: none; padding: 0; }
+    .guide-links li { margin-bottom: 7px; }
+    .guide-links a { display: inline-block; color: var(--bright-purple); text-decoration: none; border-bottom: 1px dashed rgb(221 217 255 / 35%); }
+    .guide-links a:hover { color: #fff; border-bottom-color: var(--bright-purple); }
+    .guide-footer { margin: 0; padding: 14px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; text-align: center; }
+
+    .template-panel { padding: 12px; }
+    .template-panel .eyebrow { padding: 4px 4px 0; }
+    .template-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .template-item {
+      display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-height: 50px;
+      padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-raised); text-align: left; color: var(--text);
+    }
+    .template-item:hover { border-color: var(--primary-purple); background: #2b2748; }
+    .template-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; background: var(--secondary-purple); color: var(--bright-purple); font-size: 14px; }
+    .template-meta { display: grid; gap: 1px; min-width: 0; }
+    .template-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .template-desc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    dialog {
+      width: min(780px, calc(100vw - 40px)); max-height: calc(100vh - 40px); padding: 24px; overflow: auto;
+      border: 1px solid var(--border-strong); border-radius: 18px; background: #1b1e26; color: var(--text); box-shadow: 0 30px 90px rgb(0 0 0 / 60%);
+    }
+    dialog::backdrop { background: rgb(5 7 12 / 72%); backdrop-filter: blur(4px); }
+    .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .dialog-heading h1 { margin: 0; font-size: 26px; letter-spacing: -.035em; }
+    .dialog-heading p { margin: 7px 0 0; color: var(--muted); }
+    .icon-button { width: 38px; min-height: 38px; padding: 0; justify-content: center; border-radius: 999px; }
+
+    .feedback-form { display: grid; gap: 16px; }
+    .field-label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .field-input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: 2px; background: var(--background); color: var(--text); font-size: 14px; letter-spacing: normal; text-transform: none; }
+    textarea.field-input { min-height: 150px; padding: 10px 12px; resize: vertical; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+    .chip { min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; }
+    .chip[aria-pressed="true"] { border-color: var(--primary-purple); background: var(--secondary-purple); color: var(--bright-purple); }
+    .file-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+    .quick-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+    .quick-item { width: 100%; min-height: 52px; justify-content: flex-start; text-align: left; }
+    .quick-item:hover, .quick-item:focus-visible { border-color: var(--primary-purple); background: #2b2748; }
+    .quick-item .template-icon { flex-shrink: 0; }
+    .quick-cat { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .quick-empty { color: var(--muted); font-size: 13px; padding: 12px 4px; }
+
+    .toast {
+      position: fixed; right: 18px; bottom: 18px; z-index: 100; max-width: 360px; padding: 11px 14px; opacity: 0;
+      transform: translateY(8px); pointer-events: none; border: 1px solid var(--border-strong); border-radius: 10px;
+      background: #292e39; box-shadow: 0 12px 35px rgb(0 0 0 / 35%); color: var(--text); font-size: 13px; transition: 140ms ease;
+    }
+    .toast.visible { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 900px) {
+      .brand { margin-right: auto; }
+      .toolbar-spacer { display: none; }
+      .app-shell { grid-template-columns: minmax(0, 1fr) 340px; }
+    }
+    @media (max-width: 700px) {
+      html { overflow: auto; }
+      body { height: auto; min-height: 100%; overflow: visible; }
+      .toolbar { position: sticky; top: 0; z-index: 20; }
+      .filename-field, #scriptName { width: 100%; }
+      .app-shell { min-height: 900px; grid-template-columns: 1fr; grid-template-rows: 560px auto; }
+      #main { border-right: 0; border-bottom: 1px solid var(--border); }
+      #sidebar { min-height: 600px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="toolbar" aria-label="Editor toolbar">
+    <div class="brand">
+      <i class="fa-solid fa-puzzle-piece brand-icon" aria-hidden="true"></i>
+      <span>
+        <strong>SER Visual Editor</strong>
+        <small>v2.3 · Revamped</small>
+      </span>
+    </div>
+    <button id="newBtn" class="toolbar-button" type="button"><i class="fa-solid fa-file" aria-hidden="true"></i>New</button>
+    <!-- <div style="display:flex"> -->
+    <button id="undoBtn" class="toolbar-button icon-only" type="button" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+    <button id="redoBtn" class="toolbar-button icon-only" type="button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i></button>
+    <!-- </div> -->
+    <button id="quickBtn" class="toolbar-button" type="button" title="Find a block (Ctrl+K)"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Find block</button>
+    <button id="saveProjectBtn" class="toolbar-button accent-button" type="button" title="Save an editable copy (Ctrl+S)"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save blocks</button>
+    <button id="loadProjectBtn" class="toolbar-button accent-button" type="button"><i class="fa-solid fa-folder-open" aria-hidden="true"></i>Open blocks</button>
+    <input id="projectFileInput" class="sr-only" type="file" accept=".json,application/json">
+    <button id="feedbackBtn" class="toolbar-button" type="button"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Feedback</button>
+    <span class="toolbar-spacer"></span>
+    <label class="filename-field" for="scriptName">
+      <span>Script name</span>
+      <input id="scriptName" type="text" value="my-first-script" autocomplete="off" maxlength="60">
+    </label>
+    <button id="downloadBtn" class="primary-button" type="button"><i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>Download .ser</button>
+  </header>
+
+  <div class="app-shell">
+    <main id="main" aria-label="Block workspace">
+      <div id="blocklyDiv"></div>
+      <button id="emptyWorkspaceButton" class="empty-workspace-button" type="button"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>Choose a template</button>
+    </main>
+
+    <aside id="sidebar" aria-label="Sidebar">
+      <nav class="sidebar-tabs" role="tablist" aria-label="Sidebar sections">
+        <button class="sidebar-tab is-active" type="button" role="tab" aria-selected="true" data-panel="code"><i class="fa-solid fa-code" aria-hidden="true"></i>&nbsp;Code</button>
+        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" data-panel="guide"><i class="fa-solid fa-book-open" aria-hidden="true"></i>&nbsp;Guide</button>
+        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" data-panel="templates"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>&nbsp;Templates</button>
+      </nav>
+
+      <div class="sidebar-body">
+        <section class="sidebar-panel is-active" data-panel="code" role="tabpanel" aria-label="Code">
+          <section class="lesson-panel" aria-live="polite">
+            <p class="eyebrow">Description</p>
+            <div class="lesson-head">
+              <span id="lessonIcon" class="lesson-icon ser-icon" aria-hidden="true"></span>
+              <h2 id="lessonTitle">Start with a “When” block</h2>
+            </div>
+            <p id="lessonText">Every script needs a starting point: an event, a player command, or a manual run.</p>
+            <p id="lessonTip" class="lesson-tip"></p>
+          </section>
+
+          <section class="output-panel" aria-label="Generated SER script">
+            <div class="section-heading">
+              <h2>Quick export</h2>
+              <button id="copyBtn" class="small-button" type="button"><i class="fa-solid fa-copy" aria-hidden="true"></i>Copy</button>
+            </div>
+            <textarea id="codeOutput" readonly spellcheck="false" aria-label="Generated code"></textarea>
+          </section>
+
+          <section class="diagnostics-panel" aria-label="Script checks">
+            <div class="section-heading">
+              <h2>Checks</h2>
+              <span id="statusBadge">Start here</span>
+            </div>
+            <ol id="diagnostics"></ol>
+          </section>
+        </section>
+
+        <section class="sidebar-panel" data-panel="guide" role="tabpanel" aria-label="Guide">
+          <div class="guide-block">
+            <p class="eyebrow">About</p>
+            <h2>What is SER?</h2>
+            <p>Scripted Events Revamped is a scripting layer for SCP: Secret Laboratory dedicated servers. It lets you write plain-text scripts that react to in-game events like round starts, player deaths, and custom commands, without touching server code.</p>
+            <p>This visual editor turns those scripts into draggable blocks. Every workspace exports as plain SER text you can drop into your script folder.</p>
+          </div>
+
+          <div class="guide-block">
+            <p class="eyebrow">Installation</p>
+            <h2>Get it running</h2>
+            <ol>
+              <li>Download the <code>.ser</code> file from the Code tab.</li>
+              <li>Put it in the SER script directory and run <code>serhelp start</code> in the server console to see where that is.</li>
+              <li>If your host blocks <code>.ser</code>, rename it to <code>.txt</code>.</li>
+              <li>For a new manual script, run <code>serrun name</code> in the console.</li>
+              <li>After editing, run <code>serreload</code> to pick up the changes.</li>
+              <li>Nothing happening? Run <code>serstatus</code> to list what's loaded.</li>
+            </ol>
+          </div>
+
+          <div class="guide-block">
+            <p class="eyebrow">Shortcuts</p>
+            <h2>Work faster</h2>
+            <ul>
+              <li><kbd>Ctrl</kbd> + <kbd>K</kbd> finds any block by name or purpose.</li>
+              <li><kbd>Ctrl</kbd> + <kbd>Z</kbd> and <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> undo and redo.</li>
+              <li><kbd>Ctrl</kbd> + <kbd>S</kbd> saves an editable blocks project.</li>
+              <li>Click any line in Checks to jump to the block that caused it.</li>
+            </ul>
+          </div>
+
+          <div class="guide-block">
+            <p class="eyebrow">Links</p>
+            <h2>Learn more</h2>
+            <ul class="guide-links">
+              <li><a href="https://github.com/ScriptedEventsRevamped" target="_blank" rel="noopener">GitHub for Scripted Events Revamped</a></li>
+              <li><a href="https://github.com/ScriptedEventsRevamped/SER" target="_blank" rel="noopener">Source &amp; releases</a></li>
+              <li><a href="https://github.com/ScriptedEventsRevamped/SER/wiki" target="_blank" rel="noopener">Documentation wiki</a></li>
+              <li><a href="https://store.steampowered.com/app/700330/" target="_blank" rel="noopener">SCP: Secret Laboratory on Steam</a></li>
+            </ul>
+          </div>
+
+          <div class="guide-block">
+            <p class="eyebrow">Tips</p>
+            <h2>Good to know</h2>
+            <ul>
+              <li>Every script needs at least one <strong>When</strong> block.</li>
+              <li>Inside a command, <code>@sender</code> is whoever typed it.</li>
+              <li>A <strong>Forever</strong> or <strong>While</strong> loop must contain a <strong>Wait</strong>, or the server can hang.</li>
+              <li>Use <strong>Save player data</strong> or <strong>Add to saved data</strong> to remember values across rounds.</li>
+              <li><code>@evPlayer</code> only exists inside events that provide a player.</li>
+              <li>Variables live only inside a single script run. Use player data to persist.</li>
+              <li>Blocks in the <strong>Libraries</strong> category do several steps at once. Open them to see exactly what they generate.</li>
+            </ul>
+          </div>
+
+          <p class="guide-footer">SER Blocks visual editor · v2.3<br><br>A fork of elek's visual editor included in SER with improved logic, blocks, and usability. Contact through the Feedback button or at <a href="mailto:ryangonzales6942067@gmail.com">ryangonzales6942067@gmail.com</a></p>
+        </section>
+
+        <section class="sidebar-panel" data-panel="templates" role="tabpanel" aria-label="Templates">
+          <div class="template-panel">
+            <p class="eyebrow">Starting points</p>
+            <h2 style="margin:0;font-size:15px;">Templates</h2>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.45;">Click one to load it into the workspace. Loading replaces the current workspace, so use Save blocks first if you want to keep it.</p>
+            <div id="templateList" class="template-list"></div>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <dialog id="quickDialog" aria-labelledby="quickTitle">
+    <div class="dialog-heading">
+      <div>
+        <h1 id="quickTitle">Find a block</h1>
+        <p>Describe what you want to do. Press Enter to add the top result.</p>
+      </div>
+      <button id="closeQuickBtn" class="icon-button" type="button" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+    </div>
+    <input id="quickInput" class="field-input" type="search" placeholder="e.g. heal, lockdown, countdown, loot" autocomplete="off">
+    <ul id="quickList" class="quick-list"></ul>
+  </dialog>
+
+  <dialog id="feedbackDialog" aria-labelledby="feedbackTitle">
+    <div class="dialog-heading">
+      <div>
+        <h1 id="feedbackTitle">Feedback</h1>
+        <p>Send a note, report a bug, or tell us something else.</p>
+      </div>
+      <button id="closeFeedbackBtn" class="icon-button" type="button" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+    </div>
+
+    <div class="feedback-form">
+      <div>
+        <span class="field-label">Type</span>
+        <div class="chip-row">
+          <button class="chip" type="button" data-feedback-type="feedback" aria-pressed="true">Feedback</button>
+          <button class="chip" type="button" data-feedback-type="bug" aria-pressed="false">Bug</button>
+          <button class="chip" type="button" data-feedback-type="other" aria-pressed="false">Other</button>
+        </div>
+      </div>
+
+      <label class="field-label">
+        Subject
+        <input id="feedbackSubject" class="field-input" type="text" maxlength="120" placeholder="Short summary">
+      </label>
+
+      <label class="field-label">
+        Description
+        <textarea id="feedbackDesc" class="field-input" maxlength="5000" placeholder="What happened, or what would you like to see?"></textarea>
+      </label>
+
+      <div>
+        <span class="field-label">Reply</span>
+        <div class="chip-row">
+          <button class="chip" type="button" data-feedback-reply="yes" aria-pressed="true">Contact me back</button>
+          <button class="chip" type="button" data-feedback-reply="no" aria-pressed="false">Don't contact me back</button>
+        </div>
+      </div>
+
+      <label class="field-label">
+        Your email (optional, only if you want a reply)
+        <input id="feedbackEmail" class="field-input" type="email" maxlength="254" placeholder="you@example.com" autocomplete="email">
+      </label>
+
+      <div>
+        <span class="field-label">Attachments (optional)</span>
+        <div class="file-row" style="margin-top:7px">
+          <input id="feedbackFiles" type="file" multiple accept="image/*,.txt,.json,.ser,.log,.zip">
+          <span id="feedbackFileList">No files attached</span>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="cancelFeedbackBtn" type="button">Cancel</button>
+        <button id="sendFeedbackBtn" class="primary-button" type="button"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Send feedback</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  
+  <script src="zero.js"></script>
+  
+  <script src="https://unpkg.com/blockly@13.2.1/blocks_compressed.js"></script>
+  <script src="https://unpkg.com/blockly@13.2.1/msg/en.js"></script>
+  <script src="one.js"></script>
+  <script src="blocks.js"></script>
+  <script src="recipes.js"></script>
+
+  <script>
+    (function buildSerBlocksEditor() {
+      "use strict";
+
+      const SER = window.SER_BLOCKS;
+      const editorHost = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+      const autosaveKey = "ser.visualEditor.blocks.v5";
+      const projectFormat = "ser-blockly-beginner-project";
+      const projectVersion = 5;
+      const entryTypes = new Set(["ser_when_event", "ser_when_command", "ser_when_manual", "ser_when_item"]);
+      const waitTypes = new Set(["ser_wait", "ser_wait_until"]);
+      const varBlocks = new Set(["ser_set_var", "ser_change_var", "ser_get_var", "ser_delete_var", "ser_count_loop", "ser_stopwatch_start", "ser_stopwatch_read", "ser_var_from_player", "ser_var_from_data", "ser_var_print"]);
+      const varWriters = new Set(["ser_set_var", "ser_change_var", "ser_count_loop", "ser_stopwatch_start", "ser_var_from_player", "ser_var_from_data"]);
+      const varReaders = new Set(["ser_get_var", "ser_stopwatch_read", "ser_count_loop", "ser_var_print"]);
+      const varNameRe = /^[A-Za-z_][A-Za-z0-9_]*$/;
+      const feedbackRecipient = "ryangonzales6942067@gmail.com";
+      const feedbackEndpoint = "https://script.google.com/macros/s/AKfycbyfhFOWH5Rht7v3LvHeOu9HEU70VriPfwAUDQn2k2h25ympwqcu2Wot7qXUrUh_AeGPWg/exec";
+      const maxAttachmentBytes = 4 * 1024 * 1024;
+      const feedbackTypeLabels = { feedback: "Feedback", bug: "Bug", other: "Other" };
+      const feedbackState = { type: "feedback", reply: true };
+
+      const custom = Blockly.Theme.defineTheme("ser_learning", {
+        base: Blockly.Themes.Modern,
+        componentStyles: {
+          workspaceBackgroundColour: "#121212",
+          toolboxBackgroundColour: "#1c1c1c",
+          toolboxForegroundColour: "#ffffff",
+          flyoutBackgroundColour: "#292929",
+          flyoutForegroundColour: "#ffffff",
+          flyoutOpacity: 0.8,
+          scrollbarColour: "#6e6e6e",
+          insertionMarkerColour: "#ffffff",
+          insertionMarkerOpacity: 0.32,
+          cursorColour: "#a99eff",
+          markerColour: "#a99eff",
+          selectedGlowOpacity: .8
+        },
+        fontStyle: { family: "Courier New, Google Sans Plex, Inter, Segoe UI, sans-serif", weight: "550", size: 11 },
+        startHats: true
+      });
+
+      SER.registerBlocks();
+
+      const workspace = Blockly.inject("blocklyDiv", {
+        toolbox: SER.buildToolbox(),
+        theme: custom,
+        renderer: "zelos",
+        sounds: false,
+        trashcan: true,
+        grid: { spacing: 24, length: 2, colour: "#242833", snap: false },
+        move: { scrollbars: true, drag: true, wheel: true },
+        zoom: { controls: true, wheel: true, startScale: 0.88, maxScale: 1.35, minScale: 0.52, scaleSpeed: 1.1 }
+      });
+
+      const gen = SER.gen;
+      const recipes = window.createSERRecipes(SER.bind(workspace));
+
+      const elements = {
+        codeOutput: document.getElementById("codeOutput"),
+        diagnostics: document.getElementById("diagnostics"),
+        statusBadge: document.getElementById("statusBadge"),
+        copy: document.getElementById("copyBtn"),
+        download: document.getElementById("downloadBtn"),
+        scriptName: document.getElementById("scriptName"),
+        projectFile: document.getElementById("projectFileInput"),
+        templateList: document.getElementById("templateList"),
+        lessonIcon: document.getElementById("lessonIcon"),
+        lessonTitle: document.getElementById("lessonTitle"),
+        lessonText: document.getElementById("lessonText"),
+        lessonTip: document.getElementById("lessonTip"),
+        emptyButton: document.getElementById("emptyWorkspaceButton"),
+        toast: document.getElementById("toast"),
+        newButton: document.getElementById("newBtn"),
+        undo: document.getElementById("undoBtn"),
+        redo: document.getElementById("redoBtn")
+      };
+
+      let autosaveTimer = null;
+      let toastTimer = null;
+      let clearArmedTimer = null;
+
+      function showToast(message) {
+        clearTimeout(toastTimer);
+        elements.toast.textContent = message;
+        elements.toast.classList.add("visible");
+        toastTimer = setTimeout(() => elements.toast.classList.remove("visible"), 2000);
+      }
+
+      function switchSidebarTab(name) {
+        document.querySelectorAll(".sidebar-tab").forEach(button => {
+          const active = button.dataset.panel === name;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-selected", String(active));
+        });
+        document.querySelectorAll(".sidebar-panel").forEach(panel => {
+          panel.classList.toggle("is-active", panel.dataset.panel === name);
+        });
+      }
+
+      function safeFilename(value, extension) {
+        const base = String(value || "my-first-script")
+          .replace(/\.[^.]+$/, "")
+          .replace(/[^a-zA-Z0-9_-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "my-first-script";
+        return `${base}.${extension}`;
+      }
+
+      function downloadText(filename, text, contentType) {
+        if (editorHost) {
+          editorHost.postMessage({ type: "saveFile", filename, text, contentType });
+          return;
+        }
+        const url = URL.createObjectURL(new Blob([text], { type: contentType }));
+        const anchor = Object.assign(document.createElement("a"), { href: url, download: filename });
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      function getWorkspaceState() {
+        return {
+          format: projectFormat,
+          version: projectVersion,
+          scriptName: elements.scriptName.value,
+          workspace: Blockly.serialization.workspaces.save(workspace)
+        };
+      }
+
+      function loadWorkspaceState(project) {
+        if (!project || project.format !== projectFormat || !project.workspace || typeof project.version !== "number" || project.version > projectVersion) {
+          throw new Error("This is not a valid SER Blocks project, or it was saved by a newer editor.");
+        }
+        const snapshot = Blockly.serialization.workspaces.save(workspace);
+        try {
+          workspace.clear();
+          Blockly.serialization.workspaces.load(SER.migrate(project.workspace), workspace);
+        } catch (error) {
+          workspace.clear();
+          Blockly.serialization.workspaces.load(snapshot, workspace);
+          throw error;
+        }
+        elements.scriptName.value = String(project.scriptName || "my-first-script").slice(0, 60);
+        showLesson(null);
+        updateEditor();
+      }
+
+      function saveAutosave() {
+        try {
+          localStorage.setItem(autosaveKey, JSON.stringify(getWorkspaceState()));
+        } catch {
+          // Storage can be blocked in some hosts.
+        }
+      }
+
+      function scheduleAutosave(event) {
+        if (event?.isUiEvent) return;
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(saveAutosave, 250);
+      }
+
+      function ancestorEntry(block) {
+        let current = block;
+        while (current) {
+          if (entryTypes.has(current.type)) return current;
+          current = current.getParent();
+        }
+        return null;
+      }
+
+      function eventVariableNames(eventName) {
+        const variables = SER_TRUTH_TABLE.eventDetails?.[eventName]?.variables || [];
+        return new Set(variables.map(variable => variable.name));
+      }
+
+      function nameOf(block) {
+        return String(block.getFieldValue("NAME") ?? block.getFieldValue("VAR") ?? "").trim();
+      }
+
+      function diagnose(code) {
+        const found = [];
+        const report = (severity, message, block) => found.push({ severity, message, id: block ? block.id : "" });
+        const blocks = workspace.getAllBlocks(false);
+        const entries = blocks.filter(block => entryTypes.has(block.type));
+
+        if (blocks.length && !entries.length) report("error", "Start with a 'When' block, then connect actions inside it.");
+        for (const entry of entries) {
+          if (!entry.getInputTargetBlock("DO")) report("error", "This 'When' block has nothing inside it yet.", entry);
+        }
+
+        const writers = new Set();
+        const readers = new Set();
+        for (const block of blocks) {
+          if (varWriters.has(block.type)) writers.add(nameOf(block));
+          if (varReaders.has(block.type)) readers.add(nameOf(block));
+        }
+
+        for (const block of blocks) {
+          if (!block.isShadow() && !block.getParent() && !entryTypes.has(block.type)) {
+            report("error", `'${block.serTitle}' is loose. Connect it inside a 'When' block.`, block);
+          }
+
+          const entry = ancestorEntry(block);
+
+          if (block.type === "ser_when_command" && !/^[a-zA-Z0-9_-]+$/.test(block.getFieldValue("COMMAND").trim())) {
+            report("error", "Command names can use only letters, numbers, - and _.", block);
+          }
+
+          if ((block.type === "ser_forever" || block.type === "ser_while") && !block.getDescendants(false).some(child => waitTypes.has(child.type))) {
+            report("warning", `A ${block.type === "ser_forever" ? "forever" : "while"} loop needs a wait inside it, or the server can freeze.`, block);
+          }
+
+          if (block.type === "ser_match" && !block.getInputTargetBlock("CASE1")) {
+            report("error", "A match block needs at least one case.", block);
+          }
+
+          if (block.type === "ser_lights_color" && block.getFieldValue("COLOR").replace(/[^0-9a-fA-F]/g, "").length !== 6) {
+            report("error", "A light color needs exactly 6 hex digits, like FF0000.", block);
+          }
+
+          if (block.type === "ser_when_item" && block.getFieldValue("EVENT") === "UsedItem") {
+            const filter = block.getFieldValue("FILTER");
+            const exact = block.getFieldValue("EXACT");
+            const notUsable = ["coin", "firearm", "keycard", "customKeycard"].includes(filter)
+              || (filter === "exact" && /^(Keycard|Gun|Coin)/.test(exact));
+            if (notUsable) report("error", "Coins, keycards, and firearms can't be used. Pick 'equips' for them.", block);
+          }
+          if (["ser_check_reject", "ser_check_range"].includes(block.type) && entry?.type !== "ser_when_command") {
+            report("warning", "Errors are only shown to someone who ran a command. Put this inside a 'When a player types a command' block.", block);
+          }
+          if (block.type === "ser_reply" && entry?.type !== "ser_when_command") {
+            report("warning", "Reply only works inside a command.", block);
+          }
+
+          for (const inputName of block.serSingle || []) {
+            const child = block.getInputTargetBlock(inputName);
+            if (child?.type === "ser_target" && SER.groupTargets.has(child.getFieldValue("TARGET"))) {
+            report("error", `'${block.serTitle}' needs exactly one player, not a group.`, block);
+            }
+          }
+
+          if (block.type === "ser_target") {
+            const target = block.getFieldValue("TARGET");
+            if (target.startsWith("@ev") && entry) {
+              if (!["ser_when_event", "ser_when_item"].includes(entry.type)) {
+                report("error", `${SER.targetLabels[target]} only exists inside an event.`, block);
+              } else if (!eventVariableNames(entry.getFieldValue("EVENT")).has(target)) {
+                report("error", `${SER.targetLabels[target]} doesn't exist in '${SER.eventLabels[entry.getFieldValue("EVENT")]}'. Pick another player.`, block);
+              }
+            }
+            if (target === "@sender" && entry) {
+              if (entry.type === "ser_when_event" || entry.type === "ser_when_item") {
+                report("error", "The command user only exists inside a command.", block);
+              } else if (entry.type === "ser_when_command" && entry.getFieldValue("AUDIENCE") === "Server") {
+                report("error", "A server console command has no player to use.", block);
+              }
+            }
+          }
+
+          if (varBlocks.has(block.type) && block.type !== "ser_delete_var") {
+            const name = nameOf(block);
+            if (!varNameRe.test(name)) {
+              report("error", "Variable names must start with a letter or _, and use only letters, numbers, and _.", block);
+            } else if ((block.type === "ser_set_var" || block.type === "ser_change_var") && !readers.has(name)) {
+              report("warning", `Variable '${name}' is set but never read. Did you forget a 'Variable value' block?`, block);
+            } else if (varReaders.has(block.type) && block.type !== "ser_count_loop" && !writers.has(name)) {
+              report("warning", `Variable '${name}' is read but never set. It will be empty.`, block);
+            }
+          }
+
+          if (block.type === "ser_foreach_player") {
+            const name = nameOf(block);
+            if (!varNameRe.test(name)) {
+              report("error", "Loop variable names must start with a letter or _, and use only letters, numbers, and _.", block);
+            }
+            if (!block.getDescendants(false).some(child => waitTypes.has(child.type))) {
+              report("warning", "A 'For each player' loop should contain a wait if it may run many times, to avoid stalling the server.", block);
+            }
+          }
+        }
+
+        const codeWithoutText = code.replace(/"(?:~.|[^"~])*"/g, "");
+        if (/(^|\s)\.\.\.(?=\s|$)/m.test(codeWithoutText)) {
+          report("error", "A block still has an empty input. Fill it in or plug in a value.");
+        }
+
+        const seen = new Set();
+        return found.filter(item => !seen.has(item.message) && seen.add(item.message));
+      }
+
+      function renderDiagnostics(diagnostics, hasCode) {
+        elements.diagnostics.replaceChildren();
+        const errors = diagnostics.filter(item => item.severity === "error");
+        const warnings = diagnostics.filter(item => item.severity === "warning");
+        const visible = diagnostics.length === 0 && hasCode
+          ? [{ severity: "success", message: "Everything is connected. This script is ready to download.", id: "" }]
+          : diagnostics;
+
+        const iconByseverity = { error: "fa-circle-xmark", warning: "fa-triangle-exclamation", success: "fa-circle-check" };
+        for (const item of visible) {
+          const listItem = document.createElement("li");
+          const icon = document.createElement("i");
+          icon.className = `fa-solid ${iconByScope(item.severity, iconByseverity)} sev-${item.severity}`;
+          icon.setAttribute("aria-hidden", "true");
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "diag-btn";
+          button.textContent = item.message;
+          button.disabled = !item.id;
+          button.addEventListener("click", () => focusBlock(item.id));
+          listItem.append(icon, button);
+          elements.diagnostics.appendChild(listItem);
+        }
+
+        const canExport = hasCode && errors.length === 0;
+        elements.copy.disabled = !canExport;
+        elements.download.disabled = !canExport;
+
+        const badge = elements.statusBadge;
+        if (errors.length) {
+          badge.dataset.state = "error";
+          badge.textContent = `${errors.length} to fix`;
+        } else if (warnings.length) {
+          badge.dataset.state = "warning";
+          badge.textContent = `${warnings.length} tip${warnings.length === 1 ? "" : "s"}`;
+        } else if (hasCode) {
+          badge.dataset.state = "valid";
+          badge.textContent = "Ready";
+        } else {
+          badge.dataset.state = "";
+          badge.textContent = "Start here";
+        }
+      }
+
+      function iconByScope(severity, map) {
+        return map[severity] || "fa-circle-info";
+      }
+
+      function focusBlock(id) {
+        const block = workspace.getBlockById(id);
+        if (!block) return;
+        workspace.centerOnBlock(id);
+        block.select();
+      }
+
+      function showLesson(block) {
+        if (!block) {
+          const hasBlocks = workspace.getAllBlocks(false).length > 0;
+          elements.lessonIcon.textContent = SER.glyph("f05a");
+          elements.lessonTitle.textContent = hasBlocks ? "Click a block to learn what it does" : "Start with a 'When' block";
+          elements.lessonText.textContent = hasBlocks
+            ? "Its plain-language explanation will appear here."
+            : "Every script needs a starting point: an event, a player command, or a manual run.";
+          elements.lessonTip.textContent = "";
+          return;
+        }
+        elements.lessonIcon.textContent = block.serIcon ? SER.glyph(block.serIcon) : "";
+        elements.lessonTitle.textContent = block.serTitle || block.type;
+        elements.lessonText.textContent = block.getTooltip?.() || "";
+        elements.lessonTip.textContent = block.serNote || "";
+      }
+
+      function updateEditor() {
+        let code = "";
+        try {
+          code = gen.workspaceToCode(workspace).trimEnd();
+        } catch (error) {
+          elements.codeOutput.value = "# The blocks are still being connected...";
+          renderDiagnostics([{ severity: "error", message: error.message || "The script could not be generated.", id: "" }], false);
+          return;
+        }
+        elements.codeOutput.value = code || "# Choose a template or find a block to begin.";
+        renderDiagnostics(diagnose(code), Boolean(code.trim()));
+        elements.emptyButton.hidden = workspace.getAllBlocks(false).length > 0;
+      }
+
+      function clearWorkspace(askFirst = true) {
+        if (askFirst && workspace.getAllBlocks(false).length > 0) {
+          if (!elements.newButton.dataset.armed) {
+            elements.newButton.dataset.armed = "true";
+            elements.newButton.innerHTML = '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>Click again to clear';
+            clearTimeout(clearArmedTimer);
+            clearArmedTimer = setTimeout(resetNewButton, 3000);
+            return;
+          }
+          resetNewButton();
+        }
+        workspace.clear();
+        elements.scriptName.value = "my-first-script";
+        saveAutosave();
+        showLesson(null);
+        updateEditor();
+      }
+
+      function resetNewButton() {
+        clearTimeout(clearArmedTimer);
+        delete elements.newButton.dataset.armed;
+        elements.newButton.innerHTML = '<i class="fa-solid fa-file" aria-hidden="true"></i>New';
+      }
+
+      function loadRecipe(recipe) {
+        try {
+          workspace.clear();
+          recipe.build();
+          elements.scriptName.value = recipe.filename;
+          workspace.cleanUp();
+          workspace.zoomToFit();
+          saveAutosave();
+          showLesson(null);
+          updateEditor();
+          switchSidebarTab("code");
+          showToast(`Loaded '${recipe.title}'. Change any block to make it yours.`);
+        } catch (error) {
+          workspace.clear();
+          updateEditor();
+          showToast(`Template failed: ${error.message}`);
+        }
+      }
+
+      for (const recipe of recipes) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "template-item";
+        item.dataset.recipe = recipe.id;
+
+        const icon = document.createElement("span");
+        icon.className = "template-icon ser-icon";
+        icon.textContent = SER.glyph(recipe.icon);
+        icon.setAttribute("aria-hidden", "true");
+
+        const meta = document.createElement("span");
+        meta.className = "template-meta";
+        const title = Object.assign(document.createElement("span"), { className: "template-title", textContent: recipe.title });
+        const desc = Object.assign(document.createElement("span"), { className: "template-desc", textContent: recipe.description });
+        meta.append(title, desc);
+
+        item.append(icon, meta);
+        item.addEventListener("click", () => loadRecipe(recipe));
+        elements.templateList.appendChild(item);
+      }
+
+      document.querySelectorAll(".sidebar-tab").forEach(button => {
+        button.addEventListener("click", () => switchSidebarTab(button.dataset.panel));
+      });
+      elements.emptyButton.addEventListener("click", () => switchSidebarTab("templates"));
+      document.getElementById("newBtn").addEventListener("click", () => clearWorkspace(true));
+      elements.undo.addEventListener("click", () => workspace.undo(false));
+      elements.redo.addEventListener("click", () => workspace.undo(true));
+
+      function saveProject() {
+        downloadText(
+          safeFilename(elements.scriptName.value, "ser.blocks.json"),
+          JSON.stringify(getWorkspaceState(), null, 2),
+          "application/json"
+        );
+        showToast("Saved an editable blocks project.");
+      }
+
+      document.getElementById("saveProjectBtn").addEventListener("click", saveProject);
+      document.getElementById("loadProjectBtn").addEventListener("click", () => elements.projectFile.click());
+
+      elements.projectFile.addEventListener("change", async () => {
+        const file = elements.projectFile.files?.[0];
+        if (!file) return;
+        try {
+          if (file.size > 5 * 1024 * 1024) throw new Error("That file is too large to be a blocks project.");
+          loadWorkspaceState(JSON.parse(await file.text()));
+          showToast("Opened your blocks project.");
+        } catch (error) {
+          showToast(error.message || "Could not open this blocks project.");
+        } finally {
+          elements.projectFile.value = "";
+        }
+      });
+
+      elements.copy.addEventListener("click", async () => {
+        if (elements.copy.disabled) return;
+        try {
+          await navigator.clipboard.writeText(elements.codeOutput.value);
+        } catch {
+          elements.codeOutput.focus();
+          elements.codeOutput.select();
+          document.execCommand("copy");
+        }
+        showToast("Copied the SER code.");
+      });
+
+      elements.download.addEventListener("click", () => {
+        if (elements.download.disabled) return;
+        downloadText(safeFilename(elements.scriptName.value, "ser"), elements.codeOutput.value, "text/plain;charset=utf-8");
+        showToast("Downloaded. Put it in the SER script directory, then reload scripts.");
+      });
+
+      elements.scriptName.addEventListener("input", scheduleAutosave);
+      window.addEventListener("resize", () => Blockly.svgResize(workspace));
+
+      workspace.addChangeListener(event => {
+        updateEditor();
+        scheduleAutosave(event);
+        if (event.type === Blockly.Events.SELECTED) {
+          showLesson(event.newElementId ? workspace.getBlockById(event.newElementId) : null);
+        }
+      });
+
+      const quickDialog = document.getElementById("quickDialog");
+      const quickInput = document.getElementById("quickInput");
+      const quickList = document.getElementById("quickList");
+
+      function renderQuick(query) {
+        const needle = query.trim().toLowerCase();
+        const matches = SER.catalog
+          .filter(item => !needle || `${item.title} ${item.category} ${item.tip}`.toLowerCase().includes(needle))
+          .slice(0, 40);
+        quickList.replaceChildren();
+        if (!matches.length) {
+          const empty = Object.assign(document.createElement("li"), { className: "quick-empty", textContent: "No block matches. Try a shorter word." });
+          quickList.appendChild(empty);
+          return;
+        }
+        for (const item of matches) {
+          const listItem = document.createElement("li");
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "quick-item";
+          const icon = Object.assign(document.createElement("span"), { className: "template-icon ser-icon", textContent: SER.glyph(item.icon) });
+          icon.setAttribute("aria-hidden", "true");
+          const meta = document.createElement("span");
+          meta.className = "template-meta";
+          meta.append(
+            Object.assign(document.createElement("span"), { className: "template-title", textContent: item.title }),
+            Object.assign(document.createElement("span"), { className: "template-desc", textContent: item.tip })
+          );
+          const cat = Object.assign(document.createElement("span"), { className: "quick-cat", textContent: item.category });
+          button.append(icon, meta, cat);
+          button.addEventListener("click", () => addFromCatalog(item.id));
+          listItem.appendChild(button);
+          quickList.appendChild(listItem);
+        }
+      }
+
+      function openQuickAdd() {
+        quickInput.value = "";
+        renderQuick("");
+        if (typeof quickDialog.showModal === "function") quickDialog.showModal();
+        else quickDialog.setAttribute("open", "");
+        quickInput.focus();
+      }
+
+      function addFromCatalog(id) {
+        const block = SER.makeBlock(workspace, id);
+        const metrics = workspace.getMetrics();
+        block.moveBy(metrics.viewLeft + 90, metrics.viewTop + 90);
+        block.select();
+        quickDialog.close();
+        showToast("Block added. Drag it under a 'When' block to connect it.");
+      }
+
+      quickInput.addEventListener("input", () => renderQuick(quickInput.value));
+      quickInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          const first = quickList.querySelector(".quick-item");
+          if (first) first.click();
+          event.preventDefault();
+        }
+      });
+      document.getElementById("quickBtn").addEventListener("click", openQuickAdd);
+      document.getElementById("closeQuickBtn").addEventListener("click", () => quickDialog.close());
+      quickDialog.addEventListener("click", event => {
+        if (event.target === quickDialog) quickDialog.close();
+      });
+
+      document.addEventListener("keydown", event => {
+        const mod = event.ctrlKey || event.metaKey;
+        if (!mod) return;
+        const key = event.key.toLowerCase();
+        if (key === "k") {
+          event.preventDefault();
+          openQuickAdd();
+        } else if (key === "s") {
+          event.preventDefault();
+          saveProject();
+        }
+      });
+
+      function renderFeedbackChips() {
+        document.querySelectorAll("[data-feedback-type]").forEach(button => {
+          button.setAttribute("aria-pressed", String(button.dataset.feedbackType === feedbackState.type));
+        });
+        document.querySelectorAll("[data-feedback-reply]").forEach(button => {
+          button.setAttribute("aria-pressed", String((button.dataset.feedbackReply === "yes") === feedbackState.reply));
+        });
+      }
+
+      const feedbackEls = {
+        dialog: document.getElementById("feedbackDialog"),
+        subject: document.getElementById("feedbackSubject"),
+        desc: document.getElementById("feedbackDesc"),
+        email: document.getElementById("feedbackEmail"),
+        files: document.getElementById("feedbackFiles"),
+        fileList: document.getElementById("feedbackFileList"),
+        send: document.getElementById("sendFeedbackBtn")
+      };
+
+      function resetFeedbackForm() {
+        feedbackEls.subject.value = "";
+        feedbackEls.desc.value = "";
+        feedbackEls.email.value = "";
+        feedbackEls.files.value = "";
+        feedbackEls.fileList.textContent = "No files attached";
+        feedbackState.type = "feedback";
+        feedbackState.reply = true;
+        renderFeedbackChips();
+      }
+
+      function buildFeedbackBody() {
+        const email = feedbackEls.email.value.trim();
+        const attached = [...feedbackEls.files.files].map(file => file.name);
+        return [
+          `Type: ${feedbackTypeLabels[feedbackState.type]}`,
+          `Reply: ${feedbackState.reply ? "Yes, please contact me back" : "No, please do not contact me back"}`,
+          `Reply email: ${email || "not provided"}`,
+          `Script name: ${elements.scriptName.value}`,
+          `Blocks in workspace: ${workspace.getAllBlocks(false).length}`,
+          "",
+          feedbackEls.desc.value.trim(),
+          ...(attached.length ? ["", `Attachments: ${attached.join(", ")}`] : [])
+        ].join("\n");
+      }
+
+      function readFeedbackAttachments() {
+        return Promise.all([...feedbackEls.files.files].map(file => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ name: file.name, type: file.type || "application/octet-stream", data: String(reader.result).split(",")[1] });
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        })));
+      }
+
+      async function sendFeedback() {
+        const subject = feedbackEls.subject.value.trim();
+        const email = feedbackEls.email.value.trim();
+        if (!subject || !feedbackEls.desc.value.trim()) {
+          showToast("Add a subject and a description first.");
+          return;
+        }
+        if (email && !feedbackEls.email.checkValidity()) {
+          showToast("That email address doesn't look right.");
+          return;
+        }
+        if (feedbackEls.files.files.length && [...feedbackEls.files.files].reduce((sum, file) => sum + file.size, 0) > maxAttachmentBytes) {
+          showToast("Attachments are over 4 MB. Remove some and try again.");
+          return;
+        }
+
+        const fullSubject = `[SER Blocks ${feedbackTypeLabels[feedbackState.type]}] ${subject}`;
+        const body = buildFeedbackBody();
+
+        feedbackEls.send.disabled = true;
+        try {
+          const attachments = feedbackEls.files.files.length ? await readFeedbackAttachments() : [];
+          await fetch(feedbackEndpoint, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ subject: fullSubject, body, replyTo: email, attachments })
+          });
+          showToast("Feedback sent. Thank you!");
+          resetFeedbackForm();
+          feedbackEls.dialog.close();
+        } catch {
+          const link = Object.assign(document.createElement("a"), {
+            href: `mailto:${feedbackRecipient}?subject=${encodeURIComponent(fullSubject)}&body=${encodeURIComponent(body)}`
+          });
+          link.click();
+          showToast("Could not send from the editor, so your mail app was opened instead. Attach files there.");
+        } finally {
+          feedbackEls.send.disabled = false;
+        }
+      }
+
+      document.getElementById("feedbackBtn").addEventListener("click", () => {
+        renderFeedbackChips();
+        if (typeof feedbackEls.dialog.showModal === "function") feedbackEls.dialog.showModal();
+        else feedbackEls.dialog.setAttribute("open", "");
+      });
+      document.getElementById("closeFeedbackBtn").addEventListener("click", () => feedbackEls.dialog.close());
+      document.getElementById("cancelFeedbackBtn").addEventListener("click", () => feedbackEls.dialog.close());
+      feedbackEls.send.addEventListener("click", sendFeedback);
+      feedbackEls.files.addEventListener("change", () => {
+        const picked = [...feedbackEls.files.files];
+        feedbackEls.fileList.textContent = picked.length ? picked.map(file => file.name).join(", ") : "No files attached";
+      });
+      document.querySelectorAll("[data-feedback-type]").forEach(button => {
+        button.addEventListener("click", () => {
+          feedbackState.type = button.dataset.feedbackType;
+          renderFeedbackChips();
+        });
+      });
+      document.querySelectorAll("[data-feedback-reply]").forEach(button => {
+        button.addEventListener("click", () => {
+          feedbackState.reply = button.dataset.feedbackReply === "yes";
+          renderFeedbackChips();
+        });
+      });
+      feedbackEls.dialog.addEventListener("click", event => {
+        if (event.target === feedbackEls.dialog) feedbackEls.dialog.close();
+      });
+
+      let restored = false;
+      try {
+        const saved = JSON.parse(localStorage.getItem(autosaveKey));
+        if (saved?.workspace) {
+          loadWorkspaceState(saved);
+          restored = true;
+        }
+      } catch {
+        // Corrupt or blocked storage: start fresh.
+      }
+
+      updateEditor();
+      showLesson(null);
+      if (!restored || workspace.getAllBlocks(false).length === 0) {
+        switchSidebarTab("templates");
+      }
+    })();
+  </script>
+</body>
+</html>
