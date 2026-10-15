@@ -12,6 +12,11 @@
     ["logic", "Logic & values"], ["variables", "Variables & saving"], ["server", "Server"], ["libraries", "Libraries"]
   ];
   const categoryNames = Object.fromEntries(categories);
+  const truth = SER_TRUTH_TABLE.methods;
+  const enumOf = (method, index) => {
+    const arg = truth[method].arguments[index];
+    return [...(arg.enumValues || []), ...((arg.options || []).map(option => option.value))];
+  };
 
   const targetOptions = [
     ["all players", "@all"], ["living players", "@alivePlayers"], ["SCP players", "@scpPlayers"],
@@ -24,13 +29,24 @@
   const waveOptions = [["Chaos wave", "chaosWave"], ["mini Chaos wave", "miniChaosWave"], ["MTF wave", "mtfWave"], ["mini MTF wave", "miniMtfWave"]];
   const zones = ["LightContainment", "HeavyContainment", "Entrance", "Surface"];
   const roles = ["ClassD", "Scientist", "ChaosConscript", "FacilityGuard", "NtfPrivate", "NtfSergeant", "NtfCaptain", "NtfSpecialist", "Scp173", "Scp049", "Scp096", "Scp106", "Scp079", "Scp939", "Scp3114", "Tutorial", "Spectator"];
-  const items = SER_TRUTH_TABLE.methods.GiveItem.arguments[1].enumValues.filter(item => item !== "None");
+  const items = truth.GiveItem.arguments[1].enumValues.filter(item => item !== "None");
   const effects = ["AmnesiaItems", "AmnesiaVision", "AnomalousRegeneration", "AnomalousTarget", "Asphyxiated", "Bleeding", "Blindness", "Blurred", "BodyshotReduction", "Burned", "CardiacArrest", "AntiScp207", "Scp207", "Concussed", "Corroding", "DamageReduction", "Deafened", "Decontaminating", "Disabled", "Ensnared", "Exhausted", "Fade", "Flashed", "FocusedVision", "FogControl", "Ghostly", "HeavyFooted", "Hemorrhage", "InsufficientLighting", "Invigorated", "Invisible", "Lightweight", "MovementBoost", "NightVision", "PitDeath", "PocketCorroding", "Poisoned", "RainbowTaste", "Scanned", "Scp1344", "Scp1853", "SeveredEyes", "SeveredHands", "SilentWalk", "Sinkhole", "Slowness", "SoundtrackMute", "SpawnProtected", "Stained", "Strangled", "Traumatized", "Vitality", "Hypothermia"];
-  const flagMethods = { godmode: "SetGodMode", noclip: "SetNoclip", bypass: "SetBypass", spectatable: "SetSpectatability" };
-  const keepScopeOptions = [["until cleared", "keep"], ["this life only", "life"]];
-  const variableScopeOptions = [["this script only", "local"], ["global (shared)", "global"]];
+  const flagMethods = { godmode: "SetGodMode", noclip: "SetNoclip", bypass: "SetBypass", spectatable: "SetSpectatability", intercom: "SetPlayerIntercom" };
+  const keepScopeOptions = [["until cleared", "keep"], ["this life only", "life"], ["this round only", "round"]];
+  const variableScopeOptions = [["this script only", "local"], ["global (all scripts)", "global"]];
   const clearModeOptions = [["all saved data", "all"], ["one key", "one"]];
   const doorPermissionOptions = ["Checkpoints", "ExitGates", "Intercom", "AlphaWarhead", "ContainmentLevelOne", "ContainmentLevelTwo", "ContainmentLevelThree", "ArmoryLevelOne", "ArmoryLevelTwo", "ArmoryLevelThree", "ScpOverride", "All", "None"];
+  const ammoOptions = enumOf("SetAmmoLimit", 1).filter(ammo => ammo !== "None");
+  const intercomStates = enumOf("SetIntercomState", 0);
+  const intercomInfos = enumOf("IntercomInfo", 0);
+  const shownInfos = enumOf("SetShownPlayerInfo", 1);
+  const toyTypes = enumOf("Toy.Create", 0);
+  const toyProperties = enumOf("Toy.Info", 1);
+  const primitiveShapes = enumOf("SetPrimitiveObjectProperties", 1);
+  const primitiveFlags = ["Visible", "Collidable", "Visible|Collidable"];
+  const crBaseRoles = enumOf("CRole.Register", 2);
+  const ucrEvents = SER_TRUTH_TABLE.ucrEvents;
+  const hitmarkerTypes = [["regular", "Regular"], ["blocked", "Blocked"]];
 
   const glyph = hex => {
     const code = Number.parseInt(hex, 16);
@@ -38,7 +54,7 @@
   };
   const prettyLabel = value => value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, character => character.toUpperCase());
   const asOptions = list => list.map(value => [prettyLabel(value), value]);
-  const roomNames = SER_TRUTH_TABLE.methods.GetRoomByName.arguments[0].enumValues.filter(room => room !== "Unnamed");
+  const roomNames = truth.GetRoomByName.arguments[0].enumValues.filter(room => room !== "Unnamed");
   const placeOptions = [["everywhere", "all"], ...zones.map(zone => [`${prettyLabel(zone)} zone`, zone]), ...asOptions(roomNames)];
   const itemOptions = asOptions(items);
   const effectOptions = asOptions(effects);
@@ -66,7 +82,7 @@
   };
 
   const valueOf = (block, name) => gen.valueToCode(block, name, gen.ORDER_ATOMIC) || "...";
-  const conditionOf = block => gen.valueToCode(block, "COND", gen.ORDER_NONE) || "...";
+  const conditionOf = (block, name = "COND") => gen.valueToCode(block, name, gen.ORDER_NONE) || "...";
   const bodyOf = (block, name) => gen.statementToCode(block, name);
   const escapeText = value => String(value ?? "")
     .replace(/[\r\n]+/g, " ")
@@ -102,14 +118,22 @@
     if (/^"(?:[^"~]|~.)*"$/.test(code)) return code.slice(1, -1);
     return `{${inside(code)}}`;
   };
-  const keyCode = (block, keyName, targetName) => (
-    block.getFieldValue("SCOPE") === "life"
-      ? `"${textPart(block, keyName)}_{${valueOf(block, targetName)} -> LifeId}"`
-      : valueOf(block, keyName)
-  );
+  const keyCode = (block, keyName, targetName) => {
+    const scope = block.getFieldValue("SCOPE");
+    if (scope === "life") return `"${textPart(block, keyName)}_{${valueOf(block, targetName)} -> LifeId}"`;
+    if (scope === "round") return `"${textPart(block, keyName)}_{$roundStamp}"`;
+    return valueOf(block, keyName);
+  };
   const usedTargets = root => [...new Set(
     root.getDescendants(false).filter(block => block.type === "ser_target").map(block => block.getFieldValue("TARGET"))
   )].sort();
+  const isEveryone = (block, name) => {
+    const target = block.getInputTargetBlock(name);
+    return Boolean(target && target.type === "ser_target" && target.getFieldValue("TARGET") === "@all");
+  };
+
+  const plusIcon = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><circle cx='8' cy='8' r='7' fill='#ffffff' stroke='#333' stroke-width='1'/><path d='M8 4.5v7M4.5 8h7' stroke='#222' stroke-width='2' stroke-linecap='round'/></svg>");
+  const minusIcon = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><circle cx='8' cy='8' r='7' fill='#ffffff' stroke='#333' stroke-width='1'/><path d='M4.5 8h7' stroke='#222' stroke-width='2' stroke-linecap='round'/></svg>");
 
   const specs = [];
   const def = spec => specs.push(spec);
@@ -121,10 +145,11 @@
   const dd = (field, options) => ({ field, options });
   const tf = (field, text) => ({ field, text });
   const nf = (field, number, min = -1000000, max = 1000000, precision = 0.01) => ({ field, number, min, max, precision });
+  const inputOf = (name, check) => ({ input: name, check });
+  const playerIn = name => ({ input: name, check: playerCheck });
   const evTarget = { TARGET: tgt("@evPlayer") };
   const allTarget = { TARGET: tgt("@all") };
   const singleTarget = ["TARGET"];
-  const inputOf = (name, check) => ({ input: name, check });
 
   def({
     id: "ser_when_event", cat: "start", kind: "hat", icon: "f04b", title: "When something happens",
@@ -188,16 +213,8 @@
   });
 
   def({
-    id: "ser_kill", cat: "players", kind: "statement", icon: "f714", title: "Kill",
-    tip: "Kills the chosen players.",
-    parts: ["kill", playerInput],
-    defaults: evTarget,
-    code: block => `Kill ${valueOf(block, "TARGET")}\n`
-  });
-
-  def({
     id: "ser_set_max_health", cat: "players", kind: "statement", icon: "f004", title: "Set max health",
-    tip: "Changes the maximum health of the chosen players.",
+    tip: "Changes the maximum health of the chosen players. The reference requires a value of at least 1. It does not say whether current health is adjusted when the maximum drops.",
     parts: ["set max health of", playerInput, "to", inputOf("AMOUNT", "Number")],
     defaults: { ...evTarget, AMOUNT: num(100) },
     code: block => `SetMaxHealth ${valueOf(block, "TARGET")} ${valueOf(block, "AMOUNT")}\n`
@@ -205,8 +222,8 @@
 
   def({
     id: "ser_regen", cat: "players", kind: "statement", icon: "f004", title: "Health regeneration",
-    tip: "Adds health regeneration to the chosen players for a set number of seconds.",
-    parts: ["regenerate", playerInput, "by", inputOf("RATE", "Number"), "per second for", inputOf("DURATION", "Number"), "seconds"],
+    tip: "Adds health regeneration to the chosen players for a set duration. The reference gives no units for the rate or duration, so check them in-game before relying on them.",
+    parts: ["regenerate", playerInput, "at rate", inputOf("RATE", "Number"), "for", inputOf("DURATION", "Number")],
     defaults: { ...evTarget, RATE: num(2), DURATION: num(10) },
     code: block => `SetRegeneration ${valueOf(block, "TARGET")} ${valueOf(block, "RATE")} ${valueOf(block, "DURATION")}\n`
   });
@@ -220,6 +237,29 @@
   });
 
   def({
+    id: "ser_hume", cat: "players", kind: "statement", icon: "f3c5", title: "Hume shield",
+    tip: "Sets the hume shield of the chosen players (amount, limit, regen rate, and regen cooldown), or adds an amount to it. The reference does not define the units of the regen rate.",
+    note: "'Add' only uses the amount. 'Set' uses all four values.",
+    parts: [dd("MODE", [["set", "set"], ["add", "add"]]), "hume shield of", playerInput, "amount", inputOf("AMOUNT", "Number"), "limit", inputOf("LIMIT", "Number"), "regen rate", inputOf("REGEN", "Number"), "regen cooldown", inputOf("DELAY", "Duration")],
+    defaults: { ...evTarget, AMOUNT: num(50), LIMIT: num(100), REGEN: num(1), DELAY: dur(5) },
+    code: block => {
+      const target = valueOf(block, "TARGET");
+      const amount = valueOf(block, "AMOUNT");
+      return block.getFieldValue("MODE") === "add"
+        ? `AddHume ${target} ${amount}\n`
+        : `SetHumeShield ${target} ${amount} ${valueOf(block, "LIMIT")} ${valueOf(block, "REGEN")} ${valueOf(block, "DELAY")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_stamina", cat: "players", kind: "statement", icon: "f70c", title: "Stamina",
+    tip: "Adds, removes, or sets the stamina of the chosen players as a percentage of the full bar (0% to 100%). The delay option controls whether regeneration is delayed.",
+    parts: [dd("MODE", [["add", "add"], ["remove", "remove"], ["set", "set"]]), "stamina of", playerInput, "to", inputOf("VALUE", "Number"), "%", dd("DELAY", [["delay regeneration", "true"], ["allow regeneration", "false"]])],
+    defaults: { ...evTarget, VALUE: num(100) },
+    code: block => `Stamina ${block.getFieldValue("MODE")} ${valueOf(block, "TARGET")} ${valueOf(block, "VALUE")}% ${block.getFieldValue("DELAY")}\n`
+  });
+
+  def({
     id: "ser_set_role", cat: "players", kind: "statement", icon: "f4fe", title: "Change role",
     tip: "Changes the chosen players to another role.",
     parts: ["change", playerInput, "to role", dd("ROLE", asOptions(roles))],
@@ -228,9 +268,17 @@
   });
 
   def({
+    id: "ser_set_appearance", cat: "players", kind: "statement", icon: "f508", title: "Change appearance",
+    tip: "Makes the chosen players look like another role (a reskin). Only the chosen viewers see the change.",
+    parts: ["make", playerInput, "look like role", dd("ROLE", asOptions(roles)), "for viewers", playerIn("VIEWERS")],
+    defaults: { ...evTarget, VIEWERS: tgt("@all") },
+    code: block => `SetAppearance ${valueOf(block, "TARGET")} ${block.getFieldValue("ROLE")} ${valueOf(block, "VIEWERS")}\n`
+  });
+
+  def({
     id: "ser_teleport_player", cat: "players", kind: "statement", icon: "f124", title: "Teleport to player",
     tip: "Moves the first players to the second player. The destination must be one player.",
-    parts: ["teleport", playerInput, "to", { input: "DEST", check: playerCheck }],
+    parts: ["teleport", playerInput, "to", playerIn("DEST")],
     defaults: { ...evTarget, DEST: tgt("@sender") },
     single: ["DEST"],
     code: block => `TPPlayer ${valueOf(block, "TARGET")} ${valueOf(block, "DEST")}\n`
@@ -291,18 +339,6 @@
   });
 
   def({
-    id: "ser_item_spawn", cat: "players", kind: "statement", icon: "f466", title: "Spawn item on player",
-    tip: "Creates an item and drops it onto one player. Use one player, not a group.",
-    parts: ["spawn", dd("ITEM", itemOptions), "on", playerInput, "as", tf("NAME", "spawnedItem")],
-    defaults: evTarget,
-    single: singleTarget,
-    code: block => {
-      const name = cleanName(block.getFieldValue("NAME"), "spawnedItem");
-      return `*${name} = CreatePickup ${block.getFieldValue("ITEM")}\nSpawnPickupPlayer *${name} ${valueOf(block, "TARGET")}\n`;
-    }
-  });
-
-  def({
     id: "ser_item_remove", cat: "players", kind: "statement", icon: "f1f8", title: "Remove items",
     tip: "Destroys or drops a number of one item type from the chosen players' inventories. Choose 'all items' to empty their inventories.",
     parts: [dd("MODE", [["destroy", "destroy"], ["drop on the ground", "drop"]]), inputOf("AMOUNT", "Number"), dd("ITEM", [...itemOptions, ["all items", "all"]]), "from", playerInput],
@@ -313,6 +349,18 @@
       if (block.getFieldValue("ITEM") === "all") return `ClearInventory ${target}${drop ? " drop" : ""}\n`;
       const method = drop ? "DropItem" : "DestroyItem";
       return `${method} ${target} ${block.getFieldValue("ITEM")} ${valueOf(block, "AMOUNT")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_item_spawn", cat: "players", kind: "statement", icon: "f466", title: "Spawn item on player",
+    tip: "Creates an item and drops it onto one player. Use one player, not a group.",
+    parts: ["spawn", dd("ITEM", itemOptions), "on", playerInput, "as", tf("NAME", "spawnedItem")],
+    defaults: evTarget,
+    single: singleTarget,
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "spawnedItem");
+      return `*${name} = CreatePickup ${block.getFieldValue("ITEM")}\nSpawnPickupPlayer *${name} ${valueOf(block, "TARGET")}\n`;
     }
   });
 
@@ -341,45 +389,54 @@
 
   def({
     id: "ser_set_flag", cat: "players", kind: "statement", icon: "f3ed", title: "Set player permission",
-    tip: "Turns god mode, noclip, bypass, or spectatable on or off for the chosen players.",
-    parts: ["set", dd("FLAG", [["god mode", "godmode"], ["noclip", "noclip"], ["bypass", "bypass"], ["spectatable", "spectatable"]]), "of", playerInput, "to", dd("STATE", boolOptions)],
+    tip: "Turns god mode, noclip, bypass, spectatable, or global intercom use on or off for the chosen players.",
+    parts: ["set", dd("FLAG", [["god mode", "godmode"], ["noclip", "noclip"], ["bypass", "bypass"], ["spectatable", "spectatable"], ["global intercom use", "intercom"]]), "of", playerInput, "to", dd("STATE", boolOptions)],
     defaults: evTarget,
     code: block => `${flagMethods[block.getFieldValue("FLAG")]} ${valueOf(block, "TARGET")} ${block.getFieldValue("STATE")}\n`
   });
 
   def({
-    id: "ser_set_text", cat: "players", kind: "statement", icon: "f031", title: "Set name or overhead text",
-    tip: "Changes the name shown to players, or the text shown above a player's head.",
-    parts: ["set", dd("PROP", [["display name", "display"], ["overhead text", "custom"]]), "of", playerInput, "to", inputOf("TEXT", "String")],
-    defaults: { ...evTarget, TEXT: txt("VIP") },
-    code: block => {
-      const method = block.getFieldValue("PROP") === "display" ? "SetDisplayName" : "SetCustomInfo";
-      return `${method} ${valueOf(block, "TARGET")} ${valueOf(block, "TEXT")}\n`;
-    }
+    id: "ser_set_size", cat: "players", kind: "statement", icon: "f065", title: "Set size",
+    tip: "Changes the size of the chosen players. 1 is normal size on each axis.",
+    parts: ["set size of", playerInput, "to x", inputOf("X", "Number"), "y", inputOf("Y", "Number"), "z", inputOf("Z", "Number")],
+    defaults: { ...evTarget, X: num(1), Y: num(1), Z: num(1) },
+    code: block => `SetSize ${valueOf(block, "TARGET")} ${valueOf(block, "X")} ${valueOf(block, "Y")} ${valueOf(block, "Z")}\n`
   });
 
   def({
-    id: "ser_emote", cat: "players", kind: "statement", icon: "f118", title: "Set expression",
-    tip: "Changes the face expression shown on the chosen players.",
-    parts: ["set expression of", playerInput, "to", dd("EMOTION", [["neutral", "Neutral"], ["happy", "Happy"], ["awkward smile", "AwkwardSmile"], ["scared", "Scared"], ["angry", "Angry"], ["chad", "Chad"], ["ogre", "Ogre"]])],
+    id: "ser_set_group", cat: "players", kind: "statement", icon: "f0c0", title: "Set permission group",
+    tip: "Puts the chosen players in a permission group. Type NONE to remove their group.",
+    parts: ["set group of", playerInput, "to", inputOf("GROUP", "String")],
+    defaults: { ...evTarget, GROUP: txt("NONE") },
+    code: block => `SetGroup ${valueOf(block, "TARGET")} ${valueOf(block, "GROUP")}\n`
+  });
+
+  def({
+    id: "ser_shown_info", cat: "players", kind: "statement", icon: "f2c2", title: "Show player info",
+    tip: "Chooses what information about the chosen players is shown to others.",
+    parts: ["show", dd("INFO", asOptions(shownInfos)), "of", playerInput],
     defaults: evTarget,
-    code: block => `SetEmote ${valueOf(block, "TARGET")} ${block.getFieldValue("EMOTION")}\n`
+    code: block => `SetShownPlayerInfo ${valueOf(block, "TARGET")} ${block.getFieldValue("INFO")}\n`
   });
 
   def({
-    id: "ser_gravity", cat: "players", kind: "statement", icon: "f062", title: "Set gravity",
-    tip: "Changes how strongly gravity pulls the chosen players. Normal gravity is about -9.81.",
-    parts: ["set gravity of", playerInput, "to", inputOf("GRAVITY", "Number")],
-    defaults: { ...evTarget, GRAVITY: num(-9.81) },
-    code: block => `SetGravity ${valueOf(block, "TARGET")} ${valueOf(block, "GRAVITY")}\n`
+    id: "ser_hitmarker", cat: "players", kind: "statement", icon: "f05b", title: "Hit marker",
+    tip: "Shows a hit marker to the chosen players, as if they had hit something.",
+    parts: ["show hit marker to", playerInput, "size", inputOf("SIZE", "Number"), dd("SOUND", boolOptions), "sound", dd("TYPE", hitmarkerTypes)],
+    defaults: { ...evTarget, SIZE: num(1) },
+    code: block => `ShowHitMarker ${valueOf(block, "TARGET")} ${valueOf(block, "SIZE")} ${block.getFieldValue("SOUND")} ${block.getFieldValue("TYPE")}\n`
   });
 
   def({
     id: "ser_mute", cat: "players", kind: "statement", icon: "f131", title: "Mute player",
-    tip: "Mutes the chosen players, either temporarily or until someone unmutes them.",
-    parts: ["mute", playerInput, dd("MODE", [["temporarily", "true"], ["until unmuted", "false"]])],
+    tip: "Mutes the chosen players temporarily, until someone unmutes them, or clears every mute on them.",
+    parts: ["mute", playerInput, dd("MODE", [["temporarily", "true"], ["until unmuted", "false"], ["clear all mutes", "clear"]])],
     defaults: evTarget,
-    code: block => `Mute ${valueOf(block, "TARGET")} ${block.getFieldValue("MODE")}\n`
+    code: block => (
+      block.getFieldValue("MODE") === "clear"
+        ? `ResetMute ${valueOf(block, "TARGET")}\n`
+        : `Mute ${valueOf(block, "TARGET")} ${block.getFieldValue("MODE")}\n`
+    )
   });
 
   def({
@@ -399,12 +456,28 @@
   });
 
   def({
-    id: "ser_foreach_player", cat: "players", kind: "statement", icon: "f363", title: "For each player",
-    tip: "Runs the blocks inside once per player in the chosen group.",
-    note: "Inside the loop, the current player is named with @ and your name, e.g. @p.",
-    parts: ["for each player in", playerInput, "as", tf("VAR", "p"), "do", { body: "DO" }],
+    id: "ser_damage_rule", cat: "players", kind: "statement", icon: "f524", title: "Damage rule",
+    tip: "Multiplies the damage a player deals or takes. Multiplier 2 doubles it, 0.5 halves it. Give each rule an id so you can remove it later.",
+    parts: [dd("MODE", [["add", "add"], ["remove", "remove"]]), dd("SIDE", [["damage they deal (attacker)", "attacker"], ["damage they take (receiver)", "receiver"]]), playerInput, "multiplier", inputOf("MULT", "Number"), "rule id", tf("RULE", "rule")],
+    defaults: { ...evTarget, MULT: num(1) },
+    code: block => (
+      block.getFieldValue("MODE") === "remove"
+        ? `RemoveDamageRule ${quote(block.getFieldValue("RULE"))}\n`
+        : `AddDamageRule ${block.getFieldValue("SIDE")} ${valueOf(block, "TARGET")} ${valueOf(block, "MULT")} ${quote(block.getFieldValue("RULE"))}\n`
+    )
+  });
+
+  def({
+    id: "ser_foreach_player", cat: "logic", kind: "statement", icon: "f363", title: "For each player or list item",
+    tip: "Runs the blocks inside once for each player in a group, or once for each item in a list.",
+    note: "Players: the current player is named with @ and your name, e.g. @p. List: the current item is named with $ and your name, e.g. $p.",
+    parts: ["for each", dd("SOURCE", [["player in", "players"], ["item in list", "list"]]), playerInput, tf("LIST", "myList"), "as", tf("VAR", "p"), "do", { body: "DO" }],
     defaults: { TARGET: tgt("@alivePlayers") },
-    code: (block, g) => `over ${valueOf(block, "TARGET")} with @${cleanName(block.getFieldValue("VAR"), "p")}\n${bodyOf(block, "DO")}end\n`
+    code: block => {
+      const name = cleanName(block.getFieldValue("VAR"), "p");
+      if (block.getFieldValue("SOURCE") === "list") return `over &${cleanName(block.getFieldValue("LIST"), "myList")} with $${name}\n${bodyOf(block, "DO")}end\n`;
+      return `over ${valueOf(block, "TARGET")} with @${name}\n${bodyOf(block, "DO")}end\n`;
+    }
   });
 
   def({
@@ -421,6 +494,25 @@
     parts: ["take up to", inputOf("LIMIT", "Number"), "of", playerInput],
     defaults: { TARGET: tgt("@alivePlayers"), LIMIT: num(1) },
     code: block => [`{Take ${valueOf(block, "TARGET")} ${valueOf(block, "LIMIT")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_group_ops", cat: "players", kind: "value", output: "Player", icon: "f0c0", title: "Combine player groups",
+    tip: "Joins two groups of players, removes the second group from the first, or keeps only the players both groups share.",
+    parts: [dd("MODE", [["join", "Join"], ["remove", "Except"], ["keep shared", "Intersect"]]), playerIn("A"), "and", playerIn("B")],
+    defaults: { A: tgt("@alivePlayers"), B: tgt("@scpPlayers") },
+    code: block => {
+      const method = block.getFieldValue("MODE");
+      return [`{${method} ${valueOf(block, "A")} ${valueOf(block, "B")}}`, gen.ORDER_ATOMIC];
+    }
+  });
+
+  def({
+    id: "ser_groups_overlap", cat: "players", kind: "value", output: "Boolean", icon: "f0c0", title: "Groups overlap",
+    tip: "True if the two groups of players share at least one player.",
+    parts: [playerIn("A"), "overlaps", playerIn("B")],
+    defaults: { A: tgt("@alivePlayers"), B: tgt("@scpPlayers") },
+    code: block => [`{Overlapping ${valueOf(block, "A")} ${valueOf(block, "B")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
@@ -472,7 +564,50 @@
   });
 
   def({
-    id: "ser_broadcast", cat: "messages", kind: "statement", icon: "f0a1", title: "Show message",
+    id: "ser_ammo_limit", cat: "players", kind: "statement", icon: "f1e2", title: "Set ammo limit",
+    tip: "Sets how much of one ammo type the chosen players can carry.",
+    parts: ["set", dd("AMMO", asOptions(ammoOptions)), "ammo limit of", playerInput, "to", inputOf("LIMIT", "Number")],
+    defaults: { ...evTarget, LIMIT: num(100) },
+    code: block => `SetAmmoLimit ${valueOf(block, "TARGET")} ${block.getFieldValue("AMMO")} ${valueOf(block, "LIMIT")}\n`
+  });
+
+  def({
+    id: "ser_ammo_limit_read", cat: "players", kind: "value", output: "Number", icon: "f1e2", title: "Ammo limit of player",
+    tip: "The ammo limit of one player for one ammo type.",
+    parts: [dd("AMMO", asOptions(ammoOptions)), "ammo limit of", playerInput],
+    defaults: evTarget, single: singleTarget,
+    code: block => [`{GetAmmoLimit ${valueOf(block, "TARGET")} ${block.getFieldValue("AMMO")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_scp096_target", cat: "players", kind: "value", output: "Player", icon: "f21e", title: "SCP-096 targets",
+    tip: "The players that the chosen SCP-096 is targeting.",
+    parts: ["players SCP-096", playerInput, "is targeting"],
+    defaults: { TARGET: tgt("@scpPlayers") }, single: singleTarget,
+    code: block => [`{Get096Targets ${valueOf(block, "TARGET")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_scp173_observers", cat: "players", kind: "value", output: "Player", icon: "f21e", title: "SCP-173 observers",
+    tip: "The players currently looking at the chosen SCP-173.",
+    parts: ["players observing SCP-173", playerInput],
+    defaults: { TARGET: tgt("@scpPlayers") }, single: singleTarget,
+    code: block => [`{Get173Observers ${valueOf(block, "TARGET")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_scp079", cat: "players", kind: "statement", icon: "f2db", title: "SCP-079 stats",
+    tip: "Sets one stat of the chosen SCP-079 player: access tier (1 to 5), auxiliary power, or experience.",
+    parts: ["set SCP-079", dd("STAT", [["access tier", "tier"], ["auxiliary power", "power"], ["experience", "exp"]]), "of", playerInput, "to", inputOf("VALUE", "Number")],
+    defaults: { ...evTarget, VALUE: num(1) },
+    code: block => {
+      const method = { tier: "Set079AccessTier", power: "Set079AuxPower", exp: "Set079Exp" }[block.getFieldValue("STAT")];
+      return `${method} ${valueOf(block, "TARGET")} ${valueOf(block, "VALUE")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_message", cat: "messages", kind: "statement", icon: "f0a1", title: "Show message",
     tip: "Shows a message to the chosen players for a set time. Big and small messages appear at different sizes; typed messages appear letter by letter with a CASSIE voice.",
     note: "Typed messages stop any CASSIE announcement that is already playing.",
     parts: ["show", dd("STYLE", [["big message", "big"], ["small hint", "small"], ["typed message", "typed"]]), "to", playerInput, "for", inputOf("DURATION", "Duration"), "saying", inputOf("TEXT", "String")],
@@ -492,17 +627,56 @@
   });
 
   def({
+    id: "ser_clear_screen", cat: "messages", kind: "statement", icon: "f00d", title: "Clear screen messages",
+    tip: "Removes the big messages, or the countdowns, currently shown to the chosen players.",
+    parts: ["clear", dd("MODE", [["big messages", "broadcast"], ["countdowns", "countdown"]]), "for", playerInput],
+    defaults: allTarget,
+    code: block => `${block.getFieldValue("MODE") === "countdown" ? "ClearCountdown" : "ClearBroadcasts"} ${valueOf(block, "TARGET")}\n`
+  });
+
+  def({
     id: "ser_cassie", cat: "messages", kind: "statement", icon: "f028", title: "CASSIE announcement",
     tip: "Makes a CASSIE announcement. Leave the players set to everyone, or pick specific players to only they hear it.",
     parts: ["announce on CASSIE to", playerInput, dd("MODE", [["with jingle", "jingle"], ["without jingle", "noJingle"]]), inputOf("TEXT", "String")],
     defaults: { ...allTarget, TEXT: txt("Attention all personnel") },
-    code: block => {
-      const target = block.getInputTargetBlock("TARGET");
-      const everyone = target && target.type === "ser_target" && target.getFieldValue("TARGET") === "@all";
-      return everyone
+    code: block => (
+      isEveryone(block, "TARGET")
         ? `Cassie ${block.getFieldValue("MODE")} ${valueOf(block, "TEXT")}\n`
-        : `PlayerCassie ${valueOf(block, "TARGET")} ${block.getFieldValue("MODE")} ${valueOf(block, "TEXT")}\n`;
-    }
+        : `PlayerCassie ${valueOf(block, "TARGET")} ${block.getFieldValue("MODE")} ${valueOf(block, "TEXT")}\n`
+    )
+  });
+
+  def({
+    id: "ser_cassie_stop", cat: "messages", kind: "statement", icon: "f04d", title: "Stop CASSIE",
+    tip: "Stops the CASSIE announcement that is playing right now.",
+    parts: ["stop the current CASSIE announcement"],
+    code: () => "ClearCassie\n"
+  });
+
+  def({
+    id: "ser_cassie_speaking", cat: "messages", kind: "value", output: "Boolean", icon: "f028", title: "CASSIE is speaking",
+    tip: "True while a CASSIE announcement is playing.",
+    parts: ["a CASSIE announcement is playing"],
+    code: () => ["{IsCassieSpeaking}", gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_intercom", cat: "messages", kind: "statement", icon: "f2a1", title: "Intercom",
+    tip: "Sets the intercom's state (ready, in use, cooldown, and so on) or the text shown on it. An empty text resets it.",
+    parts: ["set intercom", dd("MODE", [["state to", "state"], ["text to", "text"]]), dd("STATE", asOptions(intercomStates)), inputOf("TEXT", "String")],
+    defaults: { TEXT: txt("") },
+    code: block => (
+      block.getFieldValue("MODE") === "text"
+        ? `SetIntercomText ${valueOf(block, "TEXT")}\n`
+        : `SetIntercomState ${block.getFieldValue("STATE")}\n`
+    )
+  });
+
+  def({
+    id: "ser_intercom_info", cat: "messages", kind: "value", output: null, icon: "f2a1", title: "Intercom info",
+    tip: "Reads one fact about the intercom: its state, the speaker, cooldown, time left to speak, or its text.",
+    parts: ["intercom", dd("INFO", asOptions(intercomInfos))],
+    code: block => [`{IntercomInfo ${block.getFieldValue("INFO")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
@@ -547,11 +721,15 @@
   });
 
   def({
-    id: "ser_lights_off", cat: "world", kind: "statement", icon: "f186", title: "Turn lights off",
-    tip: "Turns off the lights in the chosen place for a duration.",
-    parts: ["turn lights off in", dd("PLACE", placeOptions), "for", inputOf("DURATION", "Duration")],
+    id: "ser_lights_off", cat: "world", kind: "statement", icon: "f186", title: "Lights off or blackout",
+    tip: "Turns off the lights in a place for a duration, or causes a full room blackout there for a duration.",
+    parts: [dd("MODE", [["turn lights off in", "lights"], ["full blackout in", "blackout"]]), dd("PLACE", placeOptions), "for", inputOf("DURATION", "Duration")],
     defaults: { DURATION: dur(10) },
-    code: block => `DisableLights ${block.getFieldValue("PLACE")} ${valueOf(block, "DURATION")}\n`
+    code: block => (
+      block.getFieldValue("MODE") === "blackout"
+        ? `Blackout ${block.getFieldValue("PLACE")} ${valueOf(block, "DURATION")}\n`
+        : `DisableLights ${block.getFieldValue("PLACE")} ${valueOf(block, "DURATION")}\n`
+    )
   });
 
   def({
@@ -567,6 +745,13 @@
     parts: ["set elevator panel text to", inputOf("TEXT", "String")],
     defaults: { TEXT: txt("Maintenance") },
     code: block => `SetElevatorText ${valueOf(block, "TEXT")}\n`
+  });
+
+  def({
+    id: "ser_cleanup", cat: "world", kind: "statement", icon: "f1f8", title: "Clean up",
+    tip: "Removes dropped items from the map, or every dead body (ragdoll).",
+    parts: ["clean up", dd("MODE", [["dropped items", "items"], ["dead bodies", "bodies"]])],
+    code: block => (block.getFieldValue("MODE") === "bodies" ? "CleanupRagdolls\n" : "CleanupPickups\n")
   });
 
   def({
@@ -620,6 +805,31 @@
   });
 
   def({
+    id: "ser_wave_timer_read", cat: "world", kind: "value", output: "Duration", icon: "f017", title: "Time until next wave",
+    tip: "How long until the next respawn wave of this type.",
+    parts: ["time until next", dd("WAVE", waveOptions), "wave"],
+    code: block => [`{GetWaveTimer ${block.getFieldValue("WAVE")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_wave_effect", cat: "world", kind: "statement", icon: "f0c0", title: "Wave effect",
+    tip: "Plays the visual effect of a respawn wave without spawning anyone.",
+    parts: ["play effect of", dd("WAVE", waveOptions)],
+    code: block => `PlayWaveEffect ${block.getFieldValue("WAVE")}\n`
+  });
+
+  def({
+    id: "ser_wave_tuning", cat: "world", kind: "statement", icon: "f0c0", title: "Wave tuning",
+    tip: "Changes a wave's respawn tokens (whole number) or its influence (decimal number). Set replaces the value; change by adds to it.",
+    parts: [dd("WAVE", waveOptions), dd("WHAT", [["respawn tokens", "tokens"], ["influence", "influence"]]), dd("MODE", [["set to", "set"], ["change by", "changeBy"]]), inputOf("VALUE", "Number")],
+    defaults: { VALUE: num(1) },
+    code: block => {
+      const method = block.getFieldValue("WHAT") === "tokens" ? "WaveRespawnTokens" : "WaveInfluence";
+      return `${method} ${block.getFieldValue("WAVE")} ${block.getFieldValue("MODE")} ${valueOf(block, "VALUE")}\n`;
+    }
+  });
+
+  def({
     id: "ser_decontamination", cat: "world", kind: "statement", icon: "f0e7", title: "LCZ decontamination",
     tip: "Turns light containment decontamination on, off, or forces it to start now.",
     parts: ["set light containment decontamination to", dd("MODE", [["enabled", "enable"], ["disabled", "disable"], ["forced", "force"]])],
@@ -634,6 +844,18 @@
   });
 
   def({
+    id: "ser_tesla_rule", cat: "world", kind: "statement", icon: "f0e7", title: "Tesla rule",
+    tip: "Makes teslas ignore the chosen players, or stops a tesla ignore rule with its id.",
+    parts: [dd("MODE", [["ignore players", "add"], ["stop ignoring (rule id)", "remove"]]), playerInput, "rule id", tf("RULE", "rule")],
+    defaults: evTarget,
+    code: block => (
+      block.getFieldValue("MODE") === "remove"
+        ? `RemoveTeslaIgnoreRule ${quote(block.getFieldValue("RULE"))}\n`
+        : `AddTeslaIgnoreRule ${valueOf(block, "TARGET")} ${quote(block.getFieldValue("RULE"))}\n`
+    )
+  });
+
+  def({
     id: "ser_audio_load", cat: "world", kind: "statement", icon: "f001", title: "Load audio clip",
     tip: "Loads an .ogg file from SER's data folder under a name you choose. The file must be 48kHz, mono.",
     parts: ["load audio file", inputOf("FILE", "String"), "as clip", inputOf("CLIP", "String")],
@@ -643,10 +865,34 @@
 
   def({
     id: "ser_speaker_create", cat: "world", kind: "statement", icon: "f028", title: "Create speaker",
-    tip: "Creates a speaker that plays audio to everyone. Volume is a percentage.",
-    parts: ["create speaker", inputOf("NAME", "String"), "at volume", inputOf("VOLUME", "Number")],
-    defaults: { NAME: txt("main"), VOLUME: num(100) },
-    code: block => `Speaker.CreateGlobal ${valueOf(block, "NAME")} ${valueOf(block, "VOLUME")}\n`
+    tip: "Creates a speaker: one heard everywhere, one at a position in the map, or one attached to a player.",
+    parts: [dd("MODE", [["for everyone", "global"], ["at a position", "position"], ["on a player", "attached"]]), "speaker", inputOf("NAME", "String"), "volume", inputOf("VOLUME", "Number"), "x", inputOf("X", "Number"), "y", inputOf("Y", "Number"), "z", inputOf("Z", "Number"), "player", playerIn("TARGET")],
+    defaults: { NAME: txt("main"), VOLUME: num(100), X: num(0), Y: num(0), Z: num(0), TARGET: tgt("@sender") },
+    code: block => {
+      const name = valueOf(block, "NAME");
+      const volume = valueOf(block, "VOLUME");
+      switch (block.getFieldValue("MODE")) {
+        case "position": return `Speaker.CreateOnPosition ${name} ${valueOf(block, "X")} ${valueOf(block, "Y")} ${valueOf(block, "Z")} ${volume}\n`;
+        case "attached": return `Speaker.CreatePlayerAttached ${valueOf(block, "TARGET")} ${name} ${volume}\n`;
+        default: return `Speaker.CreateGlobal ${name} ${volume}\n`;
+      }
+    }
+  });
+
+  def({
+    id: "ser_speaker_destroy", cat: "world", kind: "statement", icon: "f1f8", title: "Destroy speaker",
+    tip: "Removes a speaker created with 'Create speaker', and stops anything it is playing.",
+    parts: ["destroy speaker", inputOf("NAME", "String")],
+    defaults: { NAME: txt("main") },
+    code: block => `Speaker.Destroy ${valueOf(block, "NAME")}\n`
+  });
+
+  def({
+    id: "ser_speaker_exists", cat: "world", kind: "value", output: "Boolean", icon: "f028", title: "Speaker exists",
+    tip: "True if a speaker with this name currently exists.",
+    parts: ["speaker", inputOf("NAME", "String"), "exists"],
+    defaults: { NAME: txt("main") },
+    code: block => [`{Speaker.Exists ${valueOf(block, "NAME")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
@@ -666,27 +912,68 @@
   });
 
   def({
-    id: "ser_if", cat: "logic", kind: "statement", icon: "f126", title: "If",
-    tip: "Runs the first set of blocks when the condition is true. Otherwise runs the second set, if any.",
-    note: "Nest one If inside another to require two things at once.",
-    parts: ["if", inputOf("COND", "Boolean"), "then", { body: "DO" }, "otherwise", { body: "ELSE" }],
+    id: "ser_audio_check", cat: "world", kind: "value", output: "Boolean", icon: "f001", title: "Audio check",
+    tip: "True if a clip is loaded, or if a speaker is currently playing.",
+    parts: [dd("WHAT", [["clip is loaded", "loaded"], ["speaker is playing", "playing"]]), inputOf("NAME", "String")],
+    defaults: { NAME: txt("alarm") },
+    code: block => [
+      block.getFieldValue("WHAT") === "playing"
+        ? `{Audio.IsPlaying ${valueOf(block, "NAME")}}`
+        : `{Audio.IsLoaded ${valueOf(block, "NAME")}}`,
+      gen.ORDER_ATOMIC
+    ]
+  });
+
+  def({
+    id: "ser_toy_create", cat: "world", kind: "statement", icon: "f1b2", title: "Create toy",
+    tip: "Creates a map object (a light, a shape, a text sign, and so on) under a name. Use the name with 'Move or remove toy' and 'Toy info'.",
+    parts: ["create", dd("TYPE", asOptions(toyTypes)), "named", tf("NAME", "toy")],
+    code: block => `*${cleanName(block.getFieldValue("NAME"), "toy")} = Toy.Create ${block.getFieldValue("TYPE")}\n`
+  });
+
+  def({
+    id: "ser_toy_move", cat: "world", kind: "statement", icon: "f1b2", title: "Move or remove toy",
+    tip: "Moves a toy created earlier to a position, or destroys it.",
+    parts: [dd("MODE", [["move to x y z", "move"], ["destroy", "destroy"]]), "toy", tf("NAME", "toy"), "x", inputOf("X", "Number"), "y", inputOf("Y", "Number"), "z", inputOf("Z", "Number")],
+    defaults: { X: num(0), Y: num(0), Z: num(0) },
     code: block => {
-      const elseBody = bodyOf(block, "ELSE");
-      return `if ${conditionOf(block)}\n${bodyOf(block, "DO")}${elseBody ? `else\n${elseBody}` : ""}end\n`;
+      const name = cleanName(block.getFieldValue("NAME"), "toy");
+      return block.getFieldValue("MODE") === "destroy"
+        ? `Toy.Destroy *${name}\n`
+        : `Toy.Move *${name} ${valueOf(block, "X")} ${valueOf(block, "Y")} ${valueOf(block, "Z")}\n`;
     }
   });
 
   def({
-    id: "ser_if_either", cat: "logic", kind: "statement", icon: "f0c9", title: "Run if either is true",
-    tip: "Runs the blocks inside when at least one of the two conditions is true. There is no otherwise part.",
-    note: "Stack it like any block. Each set of blocks runs once, even when both conditions are true.",
-    parts: ["if", inputOf("COND", "Boolean"), "or", inputOf("COND2", "Boolean"), "then", { body: "DO" }],
-    code: block => {
-      const first = conditionOf(block);
-      const second = gen.valueToCode(block, "COND2", gen.ORDER_NONE) || "...";
-      const body = bodyOf(block, "DO");
-      return `if ${first}\n${body}elif ${second}\n${body}end\n`;
-    }
+    id: "ser_toy_info", cat: "world", kind: "value", output: "Number", icon: "f1b2", title: "Toy info",
+    tip: "Reads a position, rotation, or scale value of a toy created earlier.",
+    parts: [dd("PROP", asOptions(toyProperties)), "of toy", tf("NAME", "toy")],
+    code: block => [`{Toy.Info *${cleanName(block.getFieldValue("NAME"), "toy")} ${block.getFieldValue("PROP")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_if", cat: "logic", kind: "statement", icon: "f126", title: "If",
+    tip: "Runs the blocks inside when the conditions are true. Press + to add a condition, − to remove one. 'Any of these' joins them with or; 'all of these' joins them with and. Press + by 'otherwise' to add an else.",
+    note: "With 'any', the blocks inside are shown once per condition. Use 'all' or nested Ifs to keep each part once.",
+    parts: [],
+    code: (block, g) => {
+      const count = block.serCount || 1;
+      const conditions = Array.from({ length: count }, (_, index) => g.valueToCode(block, `COND${index}`, g.ORDER_NONE) || "...");
+      const body = g.statementToCode(block, "DO");
+      const elseBody = block.getInput("ELSE") ? g.statementToCode(block, "ELSE") : "";
+      if (block.serMode === "all") {
+        const nest = index => {
+          if (index === conditions.length) return body;
+          return `if ${conditions[index]}\n${nest(index + 1)}${elseBody ? `else\n${elseBody}` : ""}end\n`;
+        };
+        return nest(0);
+      }
+      let code = `if ${conditions[0]}\n${body}`;
+      for (let index = 1; index < conditions.length; index++) code += `elif ${conditions[index]}\n${body}`;
+      if (elseBody) code += `else\n${elseBody}`;
+      return `${code}end\n`;
+    },
+    custom: "if"
   });
 
   def({
@@ -713,7 +1000,7 @@
 
   def({
     id: "ser_count_loop", cat: "logic", kind: "statement", icon: "f0cb", title: "Count from to",
-    tip: "Runs the blocks inside once for each whole number in a range, from the first number up to the last. The current number is stored in a variable with the name you choose.",
+    tip: "Runs the blocks inside once for each whole number in a range, from the first number up to the last (both included). The current number is stored in a variable with the name you choose. Keep TO equal to or larger than FROM: the reference does not define what happens otherwise.",
     note: "Read the counter with a 'Variable value' block using the same name, e.g. i.",
     parts: ["count", tf("VAR", "i"), "from", inputOf("FROM", "Number"), "to", inputOf("TO", "Number"), "do", { body: "DO" }],
     defaults: { FROM: num(1), TO: num(5) },
@@ -755,6 +1042,13 @@
   });
 
   def({
+    id: "ser_continue", cat: "logic", kind: "statement", icon: "f061", title: "Skip to next loop step",
+    tip: "Ends the current pass through the loop early, and moves on to the next one.",
+    parts: ["skip to the next loop step"],
+    code: () => "continue\n"
+  });
+
+  def({
     id: "ser_stop", cat: "logic", kind: "statement", icon: "f04d", title: "Stop script",
     tip: "Stops this script right away.",
     parts: ["stop this script"],
@@ -792,7 +1086,7 @@
 
   def({
     id: "ser_compare", cat: "logic", kind: "value", output: "Boolean", icon: "f1ec", title: "Compare",
-    tip: "True when the comparison holds. Works with numbers and text. Plug it into an If, While, Wait until, or Run if block.",
+    tip: "True when the comparison holds. Works with numbers and text. Plug it into an If, While, Wait until, or Reject if block.",
     note: "Comparisons only work as conditions, not as stored values.",
     parts: [inputOf("A", null), dd("OP", [["is", "is"], ["is greater than", ">"], ["is less than", "<"], ["is at least", ">="], ["is at most", "<="]]), inputOf("B", null)],
     defaults: { A: num(0), B: num(0) },
@@ -802,7 +1096,7 @@
   def({
     id: "ser_chance", cat: "logic", kind: "value", output: "Boolean", icon: "f522", title: "Random chance",
     tip: "True for the chosen percentage of checks.",
-    parts: ["random chance", nf("PERCENT", 50, 1, 100, 1), "%"],
+    parts: ["random chance", nf("PERCENT", 50, 0, 100, 1), "%"],
     code: block => [`{Chance ${Number(block.getFieldValue("PERCENT")) / 100}}`, gen.ORDER_ATOMIC]
   });
 
@@ -838,6 +1132,14 @@
   });
 
   def({
+    id: "ser_script_exists", cat: "logic", kind: "value", output: "Boolean", icon: "f04b", title: "Script exists",
+    tip: "True if a script with this name is installed on the server.",
+    parts: ["script", inputOf("TEXT", "String"), "exists"],
+    defaults: { TEXT: txt("myScript") },
+    code: block => [`{ScriptExists ${valueOf(block, "TEXT")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
     id: "ser_item_matches", cat: "logic", kind: "value", output: "Boolean", icon: "f466", title: "Item is a kind",
     tip: "True if the item is a coin, any firearm, any keycard, or any custom keycard.",
     note: "The item comes from an event. Use evNewItem for equipped items and evUsableItem for used items.",
@@ -861,7 +1163,7 @@
 
   def({
     id: "ser_text", cat: "logic", kind: "value", output: "String", icon: "f031", title: "Text",
-    tip: "Text shown to players or saved for later.",
+    tip: "Text shown to players or saved for later. Curly braces { } are shown as ( ) so text is never read as a variable.",
     parts: [tf("TEXT", "Hello!")],
     code: block => [quote(block.getFieldValue("TEXT")), gen.ORDER_ATOMIC]
   });
@@ -883,7 +1185,7 @@
 
   def({
     id: "ser_math", cat: "logic", kind: "value", output: "Number", icon: "f1ec", title: "Math",
-    tip: "Basic arithmetic on two numbers. Remainder gives the leftover after dividing. Power raises the first number to the second.",
+    tip: "Basic arithmetic on two numbers. Remainder gives the leftover after dividing.",
     parts: [inputOf("A", "Number"), dd("OP", [["add", "+"], ["subtract", "-"], ["multiply", "*"], ["divide", "/"], ["remainder", "%"]]), inputOf("B", "Number")],
     defaults: { A: num(1), B: num(1) },
     code: block => [`{${inside(valueOf(block, "A"))} ${block.getFieldValue("OP")} ${inside(valueOf(block, "B"))}}`, gen.ORDER_ATOMIC]
@@ -967,8 +1269,162 @@
   });
 
   def({
+    id: "ser_func_define", cat: "logic", kind: "hat", icon: "f0c9", title: "Define function",
+    tip: "Creates a reusable function. Its blocks run only when another block runs it by name.",
+    note: "Values: a function with up to two inputs, used inside as $name. Callback: receives the player and their custom role, for use with 'Set callbacks'. Place it at the top of a script.",
+    parts: ["define function", tf("NAME", "myFunction"), dd("KIND", [["with inputs (values)", "values"], ["as a custom role callback", "callback"]]), tf("ARG1", "first"), tf("ARG2", "second"), { body: "DO" }],
+    code: (block, g) => {
+      const name = cleanName(block.getFieldValue("NAME"), "myFunction");
+      const body = g.statementToCode(block, "DO");
+      if (block.getFieldValue("KIND") === "callback") return `func ${name} with @player *role\n${body}end\n`;
+      const args = [block.getFieldValue("ARG1"), block.getFieldValue("ARG2")].map(arg => cleanName(arg, "")).filter(Boolean).map(arg => `$${arg}`);
+      return `func $${name}${args.length ? ` with ${args.join(" ")}` : ""}\n${body}end\n`;
+    }
+  });
+
+  def({
+    id: "ser_func_return", cat: "logic", kind: "statement", icon: "f3c5", title: "Return value",
+    tip: "Sends a value back from the function it is inside. Use it only inside 'Define function'.",
+    parts: ["return", inputOf("VALUE", null)],
+    code: block => `return ${valueOf(block, "VALUE")}\n`
+  });
+
+  def({
+    id: "ser_func_run", cat: "logic", kind: "statement", icon: "f04b", title: "Run function",
+    tip: "Runs a function defined with 'Define function' (values). Optionally stores what it returns in a variable.",
+    parts: ["run function", tf("NAME", "myFunction"), dd("COUNT", [["no values", "0"], ["1 value", "1"], ["2 values", "2"]]), inputOf("A1", null), inputOf("A2", null), "store result in variable", tf("RESULT", "")],
+    defaults: { A1: num(0), A2: num(0) },
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "myFunction");
+      const args = ["A1", "A2"].slice(0, Number(block.getFieldValue("COUNT"))).map(input => valueOf(block, input));
+      const call = `run $${name}${args.length ? ` ${args.join(" ")}` : ""}`;
+      const result = cleanName(block.getFieldValue("RESULT"), "");
+      return result ? `$${result} = ${call}\n` : `${call}\n`;
+    }
+  });
+
+  def({
+    id: "ser_list_new", cat: "logic", kind: "statement", icon: "f03a", title: "New list",
+    tip: "Creates an empty list under a name. Lists keep an order and can hold any values.",
+    parts: ["new list named", tf("NAME", "myList")],
+    code: block => `&${cleanName(block.getFieldValue("NAME"), "myList")} = Coll.Create\n`
+  });
+
+  def({
+    id: "ser_list_change", cat: "logic", kind: "statement", icon: "f03a", title: "Add or remove list item",
+    tip: "Adds a value to the end of a list, or removes matching values from it. Remove uses 'up to' for how many matches to remove; -1 removes all of them.",
+    parts: ["list", tf("NAME", "myList"), dd("MODE", [["add", "add"], ["remove", "remove"]]), inputOf("VALUE", null), "(up to", inputOf("AMOUNT", "Number"), "matches)"],
+    defaults: { VALUE: txt("item"), AMOUNT: num(1) },
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "myList");
+      return block.getFieldValue("MODE") === "remove"
+        ? `Coll.Remove &${name} ${valueOf(block, "VALUE")} ${valueOf(block, "AMOUNT")}\n`
+        : `Coll.Insert &${name} ${valueOf(block, "VALUE")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_list_item", cat: "logic", kind: "value", output: null, icon: "f03a", title: "List item",
+    tip: "The item at a position in the list, counting from 1. An error occurs if the position is past the end.",
+    parts: ["item", inputOf("INDEX", "Number"), "of list", tf("NAME", "myList")],
+    defaults: { INDEX: num(1) },
+    code: block => [`{Coll.Fetch &${cleanName(block.getFieldValue("NAME"), "myList")} ${valueOf(block, "INDEX")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_list_has", cat: "logic", kind: "value", output: "Boolean", icon: "f03a", title: "List contains",
+    tip: "True if the list contains the value.",
+    parts: ["list", tf("NAME", "myList"), "contains", inputOf("VALUE", null)],
+    defaults: { VALUE: txt("item") },
+    code: block => [`{Coll.Contains &${cleanName(block.getFieldValue("NAME"), "myList")} ${valueOf(block, "VALUE")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_list_combine", cat: "logic", kind: "statement", icon: "f03a", title: "Combine lists",
+    tip: "Creates a new list from two lists: joined together, or the first list with the second list's values removed.",
+    parts: ["make list", tf("TO", "combined"), "by", dd("MODE", [["joining", "Join"], ["removing items of B from A", "Subtract"]]), "A", tf("A", "listA"), "and B", tf("B", "listB")],
+    code: block => {
+      const to = cleanName(block.getFieldValue("TO"), "combined");
+      const a = cleanName(block.getFieldValue("A"), "listA");
+      const b = cleanName(block.getFieldValue("B"), "listB");
+      return `&${to} = Coll.${block.getFieldValue("MODE")} &${a} &${b}\n`;
+    }
+  });
+
+  def({
+    id: "ser_dict_new", cat: "logic", kind: "statement", icon: "f02e", title: "New dictionary",
+    tip: "Creates an empty dictionary: a set of key and value pairs under a name.",
+    parts: ["new dictionary named", tf("NAME", "myDict")],
+    code: block => `*${cleanName(block.getFieldValue("NAME"), "myDict")} = Dict.Create\n`
+  });
+
+  def({
+    id: "ser_dict_change", cat: "logic", kind: "statement", icon: "f02e", title: "Set or remove dictionary key",
+    tip: "Stores a value under a key in a dictionary, or removes a key and its value.",
+    note: "Read values back with 'Dictionary value', and check first with 'Dictionary has key' if the key may be missing.",
+    parts: ["dictionary", tf("NAME", "myDict"), dd("MODE", [["set key", "set"], ["remove key", "remove"]]), inputOf("KEY", null), "to", inputOf("VALUE", null)],
+    defaults: { KEY: txt("key"), VALUE: num(0) },
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "myDict");
+      return block.getFieldValue("MODE") === "remove"
+        ? `Dict.Remove *${name} ${valueOf(block, "KEY")}\n`
+        : `Dict.Add *${name} ${valueOf(block, "KEY")} ${valueOf(block, "VALUE")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_dict_get", cat: "logic", kind: "value", output: null, icon: "f02e", title: "Dictionary value",
+    tip: "The value stored under a key. An error occurs if the key is missing, so check with 'Dictionary has key' first.",
+    parts: ["value of key", inputOf("KEY", null), "in dictionary", tf("NAME", "myDict")],
+    defaults: { KEY: txt("key") },
+    code: block => [`{Dict.Get *${cleanName(block.getFieldValue("NAME"), "myDict")} ${valueOf(block, "KEY")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_dict_has", cat: "logic", kind: "value", output: "Boolean", icon: "f02e", title: "Dictionary has key",
+    tip: "True if the dictionary has a value stored under this key.",
+    parts: ["dictionary", tf("NAME", "myDict"), "has key", inputOf("KEY", null)],
+    defaults: { KEY: txt("key") },
+    code: block => [`{Dict.Contains *${cleanName(block.getFieldValue("NAME"), "myDict")} ${valueOf(block, "KEY")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_vote_option", cat: "logic", kind: "statement", icon: "f164", title: "Make vote option",
+    tip: "Creates one option for a vote, with the text players see. Use the name in 'Start vote'.",
+    parts: ["make vote option", tf("NAME", "yes"), "showing", inputOf("TEXT", "String")],
+    defaults: { TEXT: txt("Yes") },
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "yes");
+      return `*${name} = Vote.CreateOption ${name} ${valueOf(block, "TEXT")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_vote", cat: "logic", kind: "statement", icon: "f164", title: "Start vote",
+    tip: "Starts a vote between two options made with 'Make vote option'. Either lets the script go on, or waits for the result and stores the winning option.",
+    note: "Waiting pauses this script until the vote ends.",
+    parts: ["start vote", inputOf("QUESTION", "String"), "with options", tf("OPT1", "yes"), tf("OPT2", "no"), dd("MODE", [["and go on", "go"], ["and wait, store result in", "wait"]]), tf("RESULT", "voteResult")],
+    defaults: { QUESTION: txt("Do you agree?") },
+    code: block => {
+      const options = ["OPT1", "OPT2"].map(field => `*${cleanName(block.getFieldValue(field), "yes")}`).join(" ");
+      const question = valueOf(block, "QUESTION");
+      return block.getFieldValue("MODE") === "wait"
+        ? `$${cleanName(block.getFieldValue("RESULT"), "voteResult")} = {Vote.StartAndWait ${question} ${options}}\n`
+        : `Vote.Start ${question} ${options}\n`;
+    }
+  });
+
+  def({
+    id: "ser_var_by_name", cat: "variables", kind: "value", output: null, icon: "f02b", title: "Variable by name",
+    tip: "Reads a variable using a name written as text, so the name can come from another value.",
+    parts: ["variable named", inputOf("NAME", "String")],
+    defaults: { NAME: txt("myVariable") },
+    code: block => [`{GetVariableByName ${valueOf(block, "NAME")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
     id: "ser_set_var", cat: "variables", kind: "statement", icon: "f044", title: "Set variable",
-    tip: "Stores a value under a name, or adds an amount to a number already stored there. 'This script only' is forgotten when the script finishes running. 'Global' is shared with every other script.",
+    tip: "Stores a value under a name, or adds an amount to a number already stored there. 'This script only' is kept only while this script runs. 'Global' is shared with every other script until the server restarts.",
     note: "Give it a short name (letters, numbers, _). Read it back with 'Variable value'.",
     parts: ["set variable", tf("NAME", "myVariable"), dd("MODE", [["to", "set"], ["by adding", "change"]]), inputOf("VALUE", null), "in", dd("SCOPE", variableScopeOptions)],
     defaults: { VALUE: num(0) },
@@ -984,14 +1440,14 @@
 
   def({
     id: "ser_get_var", cat: "variables", kind: "value", output: null, icon: "f02b", title: "Variable value",
-    tip: "Reads the value stored in a local or global variable with this name.",
+    tip: "Reads the value stored in a variable with this name, whether it is local or global.",
     parts: ["variable", tf("NAME", "myVariable")],
     code: block => [`$${cleanName(block.getFieldValue("NAME"), "myVariable")}`, gen.ORDER_ATOMIC]
   });
 
   def({
     id: "ser_delete_var", cat: "variables", kind: "statement", icon: "f1f8", title: "Delete variable",
-    tip: "Removes a local or global variable entirely.",
+    tip: "Removes a variable entirely, whether it is local or global.",
     parts: ["delete variable", tf("NAME", "myVariable")],
     code: block => `delete $${cleanName(block.getFieldValue("NAME"), "myVariable")}\n`
   });
@@ -1012,9 +1468,9 @@
 
   def({
     id: "ser_save_data", cat: "variables", kind: "statement", icon: "f0c7", title: "Save player data",
-    tip: "Stores a value for one player under a name, or adds an amount to the number already saved. 'Until cleared' keeps it until you clear it. 'This life only' uses a separate key for each life, so it starts fresh when the player's next life begins.",
-    note: "Use this instead of variables to remember numbers or text about a player between events.",
-    parts: [dd("MODE", [["save", "set"], ["add", "add"]]), inputOf("VALUE", null), "for", playerInput, "as", inputOf("KEY", "String"), dd("SCOPE", keepScopeOptions)],
+    tip: "Saves a value for one player, or adds an amount to a number saved for them. The 'when it resets' choice sets how long it lasts: until cleared, this life only (resets when the player's next life starts), or this round only (resets when the round starts; needs 'Remember round start').",
+    note: "Saved on the server while it runs. For values that must survive a server restart, use 'Save to server' instead.",
+    parts: [dd("MODE", [["save", "set"], ["add", "add"]]), inputOf("VALUE", null), "for", playerInput, "as", inputOf("KEY", "String"), "when it resets:", dd("SCOPE", keepScopeOptions)],
     defaults: { ...evTarget, KEY: txt("points"), VALUE: num(1) },
     single: singleTarget,
     code: block => {
@@ -1029,16 +1485,16 @@
 
   def({
     id: "ser_read_data", cat: "variables", kind: "value", output: null, icon: "f1c0", title: "Read player data",
-    tip: "Reads a value saved with 'Save player data' using the same scope. If nothing was saved, the default is used.",
-    parts: ["saved", inputOf("KEY", "String"), "of", playerInput, dd("SCOPE", keepScopeOptions), "or", inputOf("DEFAULT", null)],
+    tip: "Reads a value saved with 'Save player data', using the same reset choice. If nothing was saved, the default is used.",
+    parts: ["saved", inputOf("KEY", "String"), "of", playerInput, "when it resets:", dd("SCOPE", keepScopeOptions), "or default", inputOf("DEFAULT", null)],
     defaults: { ...evTarget, KEY: txt("points"), DEFAULT: num(0) },
     single: singleTarget,
     code: block => [`{GetPlayerData ${valueOf(block, "TARGET")} ${keyCode(block, "KEY", "TARGET")} ${valueOf(block, "DEFAULT")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
-    id: "ser_clear_data", cat: "variables", kind: "statement", icon: "f1f8", title: "Clear saved data",
-    tip: "Erases either every value saved for the chosen player, or only the one key.",
+    id: "ser_clear_data", cat: "variables", kind: "statement", icon: "f1f8", title: "Clear player data",
+    tip: "Erases either every value saved for the chosen player, or only one key.",
     parts: ["clear", dd("MODE", clearModeOptions), "of", playerInput, "key", inputOf("KEY", "String")],
     defaults: { ...evTarget, KEY: txt("points") },
     code: block => (
@@ -1049,36 +1505,52 @@
   });
 
   def({
-    id: "ser_db_save", cat: "variables", kind: "statement", icon: "f1c0", title: "Save to database",
-    tip: "Stores a value in a database on the server's disk. It survives server restarts. Use the same database name and key to read it back.",
+    id: "ser_db_save", cat: "variables", kind: "statement", icon: "f1c0", title: "Save to server",
+    tip: "Saves a value to the server's database on disk. It survives server restarts and is shared by every script. Read it back with the same database name and key.",
     note: "Only plain numbers, text, and player values can be saved.",
-    parts: ["save", inputOf("VALUE", null), "to database", tf("DATABASE", "saves"), "under key", inputOf("KEY", "String")],
+    parts: ["save to server", tf("DATABASE", "saves"), "key", inputOf("KEY", "String"), "value", inputOf("VALUE", null)],
     defaults: { VALUE: num(0), KEY: txt("roundCount") },
     code: block => `DB.Add ${cleanName(block.getFieldValue("DATABASE"), "saves")} ${valueOf(block, "KEY")} ${valueOf(block, "VALUE")}\n`
   });
 
   def({
-    id: "ser_db_read", cat: "variables", kind: "value", output: null, icon: "f1c0", title: "Read from database",
-    tip: "Reads a value saved with 'Save to database'. Errors if the key was never saved, so check it with 'Database has key' first.",
-    parts: ["read key", inputOf("KEY", "String"), "from database", tf("DATABASE", "saves")],
+    id: "ser_db_read", cat: "variables", kind: "value", output: null, icon: "f1c0", title: "Read from server",
+    tip: "Reads a value saved with 'Save to server'. An error occurs if the key was never saved, so check it with 'Server has key' first.",
+    parts: ["read from server", tf("DATABASE", "saves"), "key", inputOf("KEY", "String")],
     defaults: { KEY: txt("roundCount") },
     code: block => [`{DB.Get ${cleanName(block.getFieldValue("DATABASE"), "saves")} ${valueOf(block, "KEY")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
-    id: "ser_db_has", cat: "variables", kind: "value", output: "Boolean", icon: "f002", title: "Database has key",
-    tip: "True if a value has been saved in the database under this key.",
-    parts: ["database", tf("DATABASE", "saves"), "has key", inputOf("KEY", "String")],
+    id: "ser_db_has", cat: "variables", kind: "value", output: "Boolean", icon: "f002", title: "Server has key",
+    tip: "True if a value is saved on the server under this key.",
+    parts: ["server", tf("DATABASE", "saves"), "has key", inputOf("KEY", "String")],
     defaults: { KEY: txt("roundCount") },
     code: block => [`{DB.Contains ${cleanName(block.getFieldValue("DATABASE"), "saves")} ${valueOf(block, "KEY")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
-    id: "ser_db_remove", cat: "variables", kind: "statement", icon: "f1f8", title: "Remove from database",
-    tip: "Deletes a key and its value from the database.",
-    parts: ["remove key", inputOf("KEY", "String"), "from database", tf("DATABASE", "saves")],
+    id: "ser_db_remove", cat: "variables", kind: "statement", icon: "f1f8", title: "Remove from server",
+    tip: "Deletes a key and its value from the server's database.",
+    parts: ["remove from server", tf("DATABASE", "saves"), "key", inputOf("KEY", "String")],
     defaults: { KEY: txt("roundCount") },
     code: block => `DB.Remove ${cleanName(block.getFieldValue("DATABASE"), "saves")} ${valueOf(block, "KEY")}\n`
+  });
+
+  def({
+    id: "ser_config_load", cat: "server", kind: "statement", icon: "f085", title: "Load config",
+    tip: "Loads a plugin's config file under a name, so its options can be read with 'Config option'.",
+    parts: ["load config named", inputOf("CONFIG", "String"), "as", tf("NAME", "config")],
+    defaults: { CONFIG: txt("myConfig") },
+    code: block => `*${cleanName(block.getFieldValue("NAME"), "config")} = Config.Read ${valueOf(block, "CONFIG")}\n`
+  });
+
+  def({
+    id: "ser_config_read", cat: "server", kind: "value", output: null, icon: "f085", title: "Config option",
+    tip: "Reads one option from a config loaded with 'Load config'. The default is used if the option is missing.",
+    parts: ["option", inputOf("KEY", "String"), "of config", tf("NAME", "config"), "or default", inputOf("DEFAULT", null)],
+    defaults: { KEY: txt("setting"), DEFAULT: num(0) },
+    code: block => [`{Config.GetOption *${cleanName(block.getFieldValue("NAME"), "config")} ${valueOf(block, "KEY")} ${valueOf(block, "DEFAULT")}}`, gen.ORDER_ATOMIC]
   });
 
   def({
@@ -1141,7 +1613,6 @@
     parts: ["real clock:", dd("INFO", [["second", "second"], ["minute", "minute"], ["hour", "hour"], ["day of week", "dayOfWeek"], ["day of week (number)", "dayOfWeekNumber"], ["day of month", "dayOfMonth"], ["day of year", "dayOfYear"], ["month", "month"], ["year", "year"], ["Unix time (UTC)", "unixTimeUtc"], ["Unix time (local)", "unixTimeLocal"]])],
     code: block => [`{TimeInfo ${block.getFieldValue("INFO")}}`, gen.ORDER_ATOMIC]
   });
-
   def({
     id: "ser_lib_reset_each_round", cat: "libraries", kind: "hat", icon: "f021", title: "Library: Reset saved value each round",
     tip: "Every time a round starts, clears one saved key for everyone. Use it for player values that should only last one round.",
@@ -1255,13 +1726,225 @@
     )
   });
 
+
+  def({
+    id: "ser_lib_round_start", cat: "libraries", kind: "hat", icon: "f017", title: "Library: Remember round start",
+    tip: "Every time a round starts, stores a new round stamp. Player data saved with 'this round only' uses that stamp, so it resets with each round.",
+    note: "Put this in any script that uses 'this round only' data. Only one copy is needed per server.",
+    parts: ["when a round starts, remember it"],
+    code: () => "!-- OnEvent RoundStarted\nglobal $roundStamp = {TimeInfo unixTimeUtc}\n"
+  });
+
+  def({
+    id: "ser_lib_colored_shape", cat: "libraries", kind: "statement", icon: "f1b2", title: "Library: Colored shape",
+    tip: "Creates a shape of the chosen type and color at a position, and sets whether it has collision and is visible.",
+    parts: ["make a", dd("SHAPE", asOptions(primitiveShapes)), "named", tf("NAME", "shape"), "color #", tf("COLOR", "FF8800"), dd("FLAGS", asOptions(primitiveFlags)), "at x", inputOf("X", "Number"), "y", inputOf("Y", "Number"), "z", inputOf("Z", "Number")],
+    defaults: { X: num(0), Y: num(0), Z: num(0) },
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "shape");
+      return `*${name} = Toy.Create primitiveObject\nToy.Move *${name} ${valueOf(block, "X")} ${valueOf(block, "Y")} ${valueOf(block, "Z")}\nSetPrimitiveObjectProperties *${name} ${block.getFieldValue("SHAPE")} ${hexOf(block.getFieldValue("COLOR"), "FF8800")} ${block.getFieldValue("FLAGS")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_lib_text_sign", cat: "libraries", kind: "statement", icon: "f031", title: "Library: Text sign",
+    tip: "Creates a sign with text on it at a position.",
+    parts: ["make a text sign named", tf("NAME", "sign"), "saying", inputOf("TEXT", "String"), "at x", inputOf("X", "Number"), "y", inputOf("Y", "Number"), "z", inputOf("Z", "Number")],
+    defaults: { TEXT: txt("Keep out"), X: num(0), Y: num(0), Z: num(0) },
+    code: block => {
+      const name = cleanName(block.getFieldValue("NAME"), "sign");
+      return `*${name} = Toy.Create text\nToy.Move *${name} ${valueOf(block, "X")} ${valueOf(block, "Y")} ${valueOf(block, "Z")}\nSetTextProperties *${name} ${valueOf(block, "TEXT")}\n`;
+    }
+  });
+
+  def({
+    id: "ser_lib_crole_register", cat: "libraries", kind: "statement", icon: "f0c0", title: "Library: Custom role register",
+    tip: "Registers a new custom role (based on an existing role) so it can be given to players, or unregisters it.",
+    note: "'Remove on death' only applies when a spawn system is named, because SER takes the spawn system before that option. Create the spawn system with one of the spawn system blocks first.",
+    parts: [dd("MODE", [["register", "register"], ["unregister", "unregister"]]), "custom role", tf("ID", "siteGuard"), "named", tf("NAME", "Site Guard"), "based on", dd("BASE", asOptions(crBaseRoles)), "spawn system", tf("SYSTEM", ""), "remove on death", dd("REMOVE", boolOptions)],
+    code: block => {
+      const id = cleanName(block.getFieldValue("ID"), "siteGuard");
+      if (block.getFieldValue("MODE") === "unregister") return `CRole.Unregister ${id}\n`;
+      const system = cleanName(block.getFieldValue("SYSTEM"), "");
+      return `CRole.Register ${id} ${quote(block.getFieldValue("NAME"))} ${block.getFieldValue("BASE")}${system ? ` *${system} ${block.getFieldValue("REMOVE")}` : ""}\n`;
+    }
+  });
+
+  def({
+    id: "ser_lib_crole_chance", cat: "libraries", kind: "statement", icon: "f522", title: "Library: Chance spawn system",
+    tip: "Makes a spawn system that replaces a base role with the custom role at a chance (a percentage). Pass the name to 'Custom role register'.",
+    parts: ["make chance spawn system", tf("SYSTEM", "chanceSystem"), "replacing", dd("BASE", asOptions(crBaseRoles)), "with the custom role at", nf("CHANCE", 50, 0, 100, 1), "%"],
+    code: block => `*${cleanName(block.getFieldValue("SYSTEM"), "chanceSystem")} = CRole.CreateChanceSpawnSystem ${block.getFieldValue("BASE")} ${Number(block.getFieldValue("CHANCE"))}%\n`
+  });
+
+  def({
+    id: "ser_lib_crole_procedural", cat: "libraries", kind: "statement", icon: "f522", title: "Library: Procedural spawn system",
+    tip: "Makes a spawn system that gives each player a chance to become the custom role, with a conversion limit and a minimum number of players. Limit and minimum are passed to SER as typed.",
+    parts: ["make procedural spawn system", tf("SYSTEM", "procSystem"), "replacing", dd("BASE", asOptions(crBaseRoles)), "per-player chance", nf("CHANCE", 25, 0, 100, 1), "%", "conversion limit", inputOf("LIMIT", "Number"), "minimum players", inputOf("MIN", "Number")],
+    defaults: { LIMIT: num(0), MIN: num(0) },
+    code: block => `*${cleanName(block.getFieldValue("SYSTEM"), "procSystem")} = CRole.CreateProceduralSpawnSystem ${block.getFieldValue("BASE")} ${Number(block.getFieldValue("CHANCE"))}% ${valueOf(block, "LIMIT")} ${valueOf(block, "MIN")}\n`
+  });
+
+  def({
+    id: "ser_lib_crole_bracket", cat: "libraries", kind: "statement", icon: "f522", title: "Library: Bracket spawn system",
+    tip: "Makes a spawn system that converts a set amount of a base role when the player count is between two numbers. Use one per range you need.",
+    note: "This block makes a system with one bracket. Each system needs its own name.",
+    parts: ["make bracket spawn system", tf("SYSTEM", "bracketSystem"), "replacing", dd("BASE", asOptions(crBaseRoles)), "when players are from", inputOf("LOW", "Number"), "to", inputOf("HIGH", "Number"), "convert", inputOf("AMOUNT", "Number")],
+    defaults: { LOW: num(1), HIGH: num(10), AMOUNT: num(1) },
+    code: block => {
+      const system = cleanName(block.getFieldValue("SYSTEM"), "bracketSystem");
+      return `*${system}Bracket = CRole.CreateSpawnBracket ${valueOf(block, "LOW")} ${valueOf(block, "HIGH")} ${valueOf(block, "AMOUNT")}\n*${system} = CRole.CreateBracketSpawnSystem ${block.getFieldValue("BASE")} *${system}Bracket\n`;
+    }
+  });
+
+  def({
+    id: "ser_lib_crole_give", cat: "libraries", kind: "statement", icon: "f007", title: "Library: Give custom role",
+    tip: "Gives a registered custom role to the chosen players.",
+    parts: ["give custom role", tf("ID", "siteGuard"), "to", playerInput],
+    defaults: evTarget,
+    code: block => `CRole.Set ${valueOf(block, "TARGET")} ${cleanName(block.getFieldValue("ID"), "siteGuard")}\n`
+  });
+
+  def({
+    id: "ser_lib_crole_callbacks", cat: "libraries", kind: "statement", icon: "f0c0", title: "Library: Custom role callbacks",
+    tip: "Chooses which functions run when a player gets or loses this custom role. The functions are made with 'Define function' (callback).",
+    note: "Both function names are needed, because SER reads them by position. Use the same name twice if one of them does nothing.",
+    parts: ["set callbacks of custom role", tf("ID", "siteGuard"), "spawning runs", tf("SPAWN", "onSpawn"), "removal runs", tf("REMOVE", "onRemove")],
+    code: block => `CRole.SetCallbacks ${cleanName(block.getFieldValue("ID"), "siteGuard")} ${cleanName(block.getFieldValue("SPAWN"), "onSpawn")} ${cleanName(block.getFieldValue("REMOVE"), "onRemove")}\n`
+  });
+
+  def({
+    id: "ser_lib_crole_registered", cat: "libraries", kind: "value", output: "Boolean", icon: "f002", title: "Custom role is registered",
+    tip: "True if a custom role with this id is registered on the server.",
+    parts: ["custom role", tf("ID", "siteGuard"), "is registered"],
+    code: block => [`{CRole.IsRegistered ${cleanName(block.getFieldValue("ID"), "siteGuard")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_lib_crole_event", cat: "libraries", kind: "hat", icon: "f0c0", title: "Library: When a custom role spawns or is removed",
+    tip: "Runs the blocks inside when a player gets or loses a custom role. Leave the role blank to run it for every custom role. Inside, @player and *evCRole are the player and their role.",
+    parts: ["when a custom role", dd("EVENT", [["spawns", "spawned"], ["is removed", "removed"]]), "for role", tf("ID", ""), "do", { body: "DO" }],
+    code: (block, g) => {
+      const id = cleanName(block.getFieldValue("ID"), "");
+      return `!-- OnCRole ${block.getFieldValue("EVENT")}\n${id ? `-- forRoles ${id}\n` : ""}\n${unindent(g.statementToCode(block, "DO"))}`;
+    }
+  });
+
+  def({
+    id: "ser_lib_ucr_role", cat: "libraries", kind: "statement", icon: "f007", title: "Library: UCR role give or remove",
+    tip: "Gives a player a role from the UncomplicatedCustomRoles plugin, by its number, or removes their role. This needs that plugin installed.",
+    parts: [dd("MODE", [["give UCR role", "give"], ["remove UCR role", "remove"]]), inputOf("ROLE", "Number"), "to", playerInput],
+    defaults: { ...evTarget, ROLE: num(1) },
+    single: singleTarget,
+    code: block => (
+      block.getFieldValue("MODE") === "remove"
+        ? `UCR.RemoveRole ${valueOf(block, "TARGET")}\n`
+        : `UCR.SetRole ${valueOf(block, "TARGET")} ${valueOf(block, "ROLE")}\n`
+    )
+  });
+
+  def({
+    id: "ser_lib_ucr_players", cat: "libraries", kind: "value", output: "Player", icon: "f0c0", title: "Players with UCR role",
+    tip: "The players who have a UCR role, by its number. Needs the UncomplicatedCustomRoles plugin.",
+    parts: ["players with UCR role", inputOf("ROLE", "Number")],
+    defaults: { ROLE: num(1) },
+    code: block => [`{UCR.GetPlayersWithRole ${valueOf(block, "ROLE")}}`, gen.ORDER_ATOMIC]
+  });
+
+  def({
+    id: "ser_lib_ucr_event", cat: "libraries", kind: "hat", icon: "f0c0", title: "Library: When a UCR event fires",
+    tip: "Runs the blocks inside when an UncomplicatedCustomRoles event happens. Needs that plugin installed.",
+    parts: ["when UCR", dd("EVENT", asOptions(ucrEvents)), "happens, do", { body: "DO" }],
+    code: (block, g) => `!-- OnUCR ${block.getFieldValue("EVENT")}\n\n${unindent(g.statementToCode(block, "DO"))}`
+  });
+
   const specById = Object.fromEntries(specs.map(spec => [spec.id, spec]));
 
-  const shadowInputs = defaults => Object.fromEntries(
-    Object.entries(defaults || {})
-      .filter(([, value]) => Array.isArray(value))
-      .map(([name, [type, fields]]) => [name, { shadow: { type, fields } }])
-  );
+  const itemTest = (ref, kind, exact) => {
+    const needles = { coin: "Coin", firearm: "Gun", keycard: "Keycard", customKeycard: "KeycardCustom" };
+    return kind === "exact"
+      ? `{*${ref} -> type} is ${quote(exact)}`
+      : `{Text.Contains {*${ref} -> type} ${quote(needles[kind])}}`;
+  };
+
+  function renderIf(block) {
+    const kept = {};
+    for (const input of block.inputList) {
+      const child = input.connection && input.connection.targetBlock();
+      if (input.name && child) kept[input.name] = child;
+    }
+    for (const child of Object.values(kept)) child.unplug(false);
+    for (const input of [...block.inputList]) if (input.name) block.removeInput(input.name, true);
+
+    const mode = block.serMode || "any";
+    const count = block.serCount || 1;
+    const head = block.appendDummyInput("HEAD").appendField("if");
+    head.appendField(new Blockly.FieldDropdown([["any of these", "any"], ["all of these", "all"]], value => {
+      if (value !== block.serMode) {
+        block.serMode = value;
+        Promise.resolve().then(() => renderIf(block));
+      }
+      return value;
+    }), "MODE");
+    block.getField("MODE").setValue(mode);
+    head.appendField(new Blockly.FieldImage(plusIcon, 16, 16, "add a condition", () => block.serAddCondition()), "ADD_CONDITION");
+    head.appendField(new Blockly.FieldImage(minusIcon, 16, 16, "remove a condition", () => block.serRemoveCondition()), "REMOVE_CONDITION");
+    for (let index = 0; index < count; index++) {
+      if (index > 0) block.appendDummyInput(`JOIN${index}`).appendField(mode === "all" ? "and" : "or");
+      block.appendValueInput(`COND${index}`).setCheck("Boolean");
+    }
+    block.appendDummyInput("THEN").appendField("then");
+    block.appendStatementInput("DO").setCheck(actionCheck);
+    block.appendDummyInput("ELSE_ROW").appendField("otherwise").appendField(
+      new Blockly.FieldImage(block.serElse ? minusIcon : plusIcon, 16, 16, block.serElse ? "remove the else part" : "add an else part", () => block.serToggleElse()),
+      "ELSE_TOGGLE"
+    );
+    if (block.serElse) block.appendStatementInput("ELSE").setCheck(actionCheck);
+
+    for (const [name, child] of Object.entries(kept)) {
+      const input = block.getInput(name);
+      if (input && input.connection) {
+        input.connection.connect(child.outputConnection || child.previousConnection);
+      } else {
+        child.dispose(false);
+      }
+    }
+  }
+
+  const ifMethods = {
+    serAddCondition() { this.serCount = (this.serCount || 1) + 1; renderIf(this); },
+    serRemoveCondition() { if ((this.serCount || 1) > 1) { this.serCount -= 1; renderIf(this); } },
+    serToggleElse() { this.serElse = !this.serElse; renderIf(this); },
+    saveExtraState() { return { mode: this.serMode || "any", count: this.serCount || 1, hasElse: Boolean(this.serElse) }; },
+    loadExtraState(state) {
+      this.serMode = state.mode || "any";
+      this.serCount = state.count || 1;
+      this.serElse = Boolean(state.hasElse);
+      renderIf(this);
+    },
+    mutationToDom() {
+      const element = Blockly.utils.xml.createElement("mutation");
+      element.setAttribute("mode", this.serMode || "any");
+      element.setAttribute("count", String(this.serCount || 1));
+      element.setAttribute("else", this.serElse ? "1" : "0");
+      return element;
+    },
+    domToMutation(element) {
+      this.serMode = element.getAttribute("mode") || "any";
+      this.serCount = Number(element.getAttribute("count")) || 1;
+      this.serElse = element.getAttribute("else") === "1";
+      renderIf(this);
+    }
+  };
+  specs.find(spec => spec.id === "ser_if").extra = ifMethods;
+
+  function shadowInputs(defaults) {
+    return Object.fromEntries(
+      Object.entries(defaults || {})
+        .filter(([, value]) => Array.isArray(value))
+        .map(([name, [type, fields]]) => [name, { shadow: { type, fields } }])
+    );
+  }
 
   function chain(list) {
     for (let index = 1; index < list.length; index++) {
@@ -1336,7 +2019,19 @@
 
   function registerBlocks() {
     for (const spec of specs) {
-      Blockly.Blocks[spec.id] = { init() { buildBlock(this, spec); } };
+      const definition = {
+        init() {
+          buildBlock(this, spec);
+          if (spec.id === "ser_if") {
+            this.serMode = "any";
+            this.serCount = 1;
+            this.serElse = false;
+            renderIf(this);
+          }
+        }
+      };
+      if (spec.extra) Object.assign(definition, spec.extra);
+      Blockly.Blocks[spec.id] = definition;
       gen.forBlock[spec.id] = spec.code;
     }
   }
@@ -1358,17 +2053,11 @@
     };
   }
 
-  const itemTest = (ref, kind, exact) => {
-    const needles = { coin: "Coin", firearm: "Gun", keycard: "Keycard", customKeycard: "KeycardCustom" };
-    return kind === "exact"
-      ? `{*${ref} -> type} is ${quote(exact)}`
-      : `{Text.Contains {*${ref} -> type} ${quote(needles[kind])}}`;
-  };
-
   const removedBlocks = new Set(["ser_clamp", "ser_min_max", "ser_abs", "ser_not", "ser_and_or", "ser_pick", "ser_text_length"]);
   const numberShadow = number => ({ shadow: { type: "ser_number", fields: { NUMBER: number } } });
   const textShadow = text => ({ shadow: { type: "ser_text", fields: { TEXT: text } } });
   const playerShadow = target => ({ shadow: { type: "ser_target", fields: { TARGET: target } } });
+  const boolShadow = value => ({ shadow: { type: "ser_boolean", fields: { VALUE: value } } });
   const targetInput = block => block.inputs?.TARGET ?? playerShadow("@evPlayer");
   const markRemoved = (block, label) => {
     block.type = "ser_text";
@@ -1381,17 +2070,17 @@
       const count = Number(block.fields?.COUNT ?? 3);
       Object.assign(block, { type: "ser_count_loop", fields: { VAR: "i" }, inputs: { FROM: numberShadow(1), TO: numberShadow(count), DO: block.inputs?.DO } });
     },
-    ser_forever: block => Object.assign(block, { type: "ser_while", fields: {}, inputs: { COND: { shadow: { type: "ser_boolean", fields: { VALUE: "true" } } }, DO: block.inputs?.DO } }),
+    ser_forever: block => Object.assign(block, { type: "ser_while", fields: {}, inputs: { COND: boolShadow("true"), DO: block.inputs?.DO } }),
     ser_var_from_player: block => Object.assign(block, {
-      type: "ser_set_var", fields: { NAME: block.fields?.NAME ?? "myVariable", SCOPE: "local" },
+      type: "ser_set_var", fields: { NAME: block.fields?.NAME ?? "myVariable", MODE: "set", SCOPE: "local" },
       inputs: { VALUE: { block: { type: "ser_player_value", fields: { PROP: block.fields?.PROP ?? "health" }, inputs: { TARGET: targetInput(block) } } } }
     }),
     ser_var_from_data: block => Object.assign(block, {
-      type: "ser_set_var", fields: { NAME: block.fields?.NAME ?? "savedValue", SCOPE: "local" },
+      type: "ser_set_var", fields: { NAME: block.fields?.NAME ?? "savedValue", MODE: "set", SCOPE: "local" },
       inputs: { VALUE: { block: { type: "ser_read_data", fields: { SCOPE: "keep" }, inputs: { KEY: block.inputs?.KEY ?? textShadow("points"), TARGET: targetInput(block), DEFAULT: block.inputs?.DEFAULT ?? numberShadow(0) } } } }
     }),
     ser_var_copy: block => Object.assign(block, {
-      type: "ser_set_var", fields: { NAME: block.fields?.TO ?? "myCopy", SCOPE: "local" },
+      type: "ser_set_var", fields: { NAME: block.fields?.TO ?? "myCopy", MODE: "set", SCOPE: "local" },
       inputs: { VALUE: { block: { type: "ser_get_var", fields: { NAME: block.fields?.FROM ?? "myVariable" } } } }
     }),
     ser_var_print: block => Object.assign(block, {
@@ -1401,19 +2090,10 @@
     ser_player_name: block => Object.assign(block, { type: "ser_player_value", fields: { PROP: "name" }, inputs: { TARGET: targetInput(block) } }),
     ser_player_id: block => Object.assign(block, { type: "ser_player_value", fields: { PROP: "playerId" }, inputs: { TARGET: targetInput(block) } }),
     ser_read_player: block => Object.assign(block, { type: "ser_player_value" }),
-    ser_heal: block => Object.assign(block, { type: "ser_health", fields: { MODE: "heal" } }),
-    ser_hurt: block => Object.assign(block, { type: "ser_health", fields: { MODE: "hurt" } }),
-    ser_set_health: block => Object.assign(block, { type: "ser_health", fields: { MODE: "set" } }),
-    ser_item_drop: block => Object.assign(block, { type: "ser_item_remove", fields: { MODE: "drop", ITEM: block.fields?.ITEM ?? "Coin" } }),
-    ser_clear_inventory: block => Object.assign(block, { type: "ser_item_remove", fields: { MODE: "destroy", ITEM: "all" }, inputs: { TARGET: targetInput(block), AMOUNT: numberShadow(1) } }),
-    ser_remove_effect: block => Object.assign(block, { type: "ser_give_effect", fields: { MODE: "remove", EFFECT: block.fields?.EFFECT ?? "all" } }),
-    ser_tp_position: block => Object.assign(block, { type: "ser_tp_room", fields: { PLACE: "exact" } }),
-    ser_check_range: block => Object.assign(block, { type: "ser_check_reject", fields: { MODE: "range" }, inputs: { VALUE: block.inputs?.VALUE ?? numberShadow(0), MIN: block.inputs?.MIN ?? numberShadow(1), MAX: block.inputs?.MAX ?? numberShadow(10), TEXT: block.inputs?.TEXT ?? textShadow("Pick a number from 1 to 10.") } }),
-    ser_change_var: block => Object.assign(block, { type: "ser_set_var", fields: { NAME: block.fields?.NAME ?? "myVariable", MODE: "change", SCOPE: "local" }, inputs: { VALUE: block.inputs?.AMOUNT ?? numberShadow(1) } }),
-    ser_save_add: block => Object.assign(block, { type: "ser_save_data", fields: { MODE: "add", SCOPE: "keep" }, inputs: { VALUE: block.inputs?.AMOUNT ?? numberShadow(1), KEY: block.inputs?.KEY ?? textShadow("points"), TARGET: targetInput(block) } }),
     ser_round_value: block => Object.assign(block, { type: "ser_round_places", fields: {}, inputs: { VALUE: block.inputs?.VALUE ?? numberShadow(0), PLACES: numberShadow(0) } }),
-    ser_hint: block => Object.assign(block, { type: "ser_broadcast", fields: { STYLE: "small" } }),
-    ser_animated_broadcast: block => Object.assign(block, { type: "ser_broadcast", fields: { STYLE: "typed" } }),
+    ser_broadcast: block => Object.assign(block, { type: "ser_message" }),
+    ser_hint: block => Object.assign(block, { type: "ser_message", fields: { STYLE: "small" } }),
+    ser_animated_broadcast: block => Object.assign(block, { type: "ser_message", fields: { STYLE: "typed" } }),
     ser_player_cassie: block => Object.assign(block, { type: "ser_cassie" }),
     ser_cassie: block => { block.inputs = { ...(block.inputs || {}), TARGET: block.inputs?.TARGET ?? playerShadow("@all") }; },
     ser_lights_reset: block => Object.assign(block, { type: "ser_lights_color", fields: { PLACE: block.fields?.PLACE ?? "all", MODE: "reset", COLOR: "FFFFFF" } }),
@@ -1424,7 +2104,28 @@
       else if (info === "playerCount") Object.assign(block, { type: "ser_server_info", fields: { INFO: "playerCount" } });
       else if (info === "aliveCount") Object.assign(block, { type: "ser_count", fields: {}, inputs: { TARGET: playerShadow("@alivePlayers") } });
       else if (info === "roundNumber" || info === "uptime") markRemoved(block, `round info (${info})`);
-    }
+    },
+    ser_heal: block => Object.assign(block, { type: "ser_health", fields: { MODE: "heal" } }),
+    ser_hurt: block => Object.assign(block, { type: "ser_health", fields: { MODE: "hurt" } }),
+    ser_set_health: block => Object.assign(block, { type: "ser_health", fields: { MODE: "set" } }),
+    ser_item_drop: block => Object.assign(block, { type: "ser_item_remove", fields: { MODE: "drop", ITEM: block.fields?.ITEM ?? "Coin" } }),
+    ser_clear_inventory: block => Object.assign(block, { type: "ser_item_remove", fields: { MODE: "destroy", ITEM: "all" }, inputs: { TARGET: targetInput(block), AMOUNT: numberShadow(1) } }),
+    ser_remove_effect: block => Object.assign(block, { type: "ser_give_effect", fields: { MODE: "remove", EFFECT: block.fields?.EFFECT ?? "all" } }),
+    ser_tp_position: block => Object.assign(block, { type: "ser_tp_room", fields: { PLACE: "exact" } }),
+    ser_change_var: block => Object.assign(block, { type: "ser_set_var", fields: { NAME: block.fields?.NAME ?? "myVariable", MODE: "change", SCOPE: "local" }, inputs: { VALUE: block.inputs?.AMOUNT ?? numberShadow(1) } }),
+    ser_save_add: block => Object.assign(block, { type: "ser_save_data", fields: { MODE: "add", SCOPE: "keep" }, inputs: { VALUE: block.inputs?.AMOUNT ?? numberShadow(1), KEY: block.inputs?.KEY ?? textShadow("points"), TARGET: targetInput(block) } }),
+    ser_check_range: block => Object.assign(block, { type: "ser_check_reject", fields: { MODE: "range" }, inputs: { VALUE: block.inputs?.VALUE ?? numberShadow(0), MIN: block.inputs?.MIN ?? numberShadow(1), MAX: block.inputs?.MAX ?? numberShadow(10), TEXT: block.inputs?.TEXT ?? textShadow("Pick a number from 1 to 10.") } }),
+    ser_if: block => {
+      if (!block.inputs || !("COND" in block.inputs)) return;
+      const { COND, ...rest } = block.inputs;
+      block.inputs = { COND0: COND, ...rest };
+      block.extraState = { mode: "any", count: 1, hasElse: Boolean(rest.ELSE) };
+    },
+    ser_if_either: block => Object.assign(block, {
+      type: "ser_if",
+      inputs: { COND0: block.inputs?.COND ?? boolShadow("false"), COND1: block.inputs?.COND2 ?? boolShadow("false"), DO: block.inputs?.DO },
+      extraState: { mode: "any", count: 2, hasElse: false }
+    })
   };
 
   function migrateBlock(block) {
@@ -1468,6 +2169,7 @@
     targetLabels,
     groupTargets,
     eventLabels,
+    specById,
     catalog,
     migrate,
     registerBlocks,
