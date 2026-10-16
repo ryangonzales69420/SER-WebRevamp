@@ -1,4 +1,0 @@
-- Add custom item improvements, more customization, other than just a library.
-- Allow custom lights on item dropped
-- Add licencing & aboutme
-- Publisize
