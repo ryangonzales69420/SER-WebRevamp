@@ -26,6 +26,10 @@
     <button style="aspect-ratio: 1;height: 15px;" id="redoBtn" class="toolbar-button" type="button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i></button>
     </div> -->
     <button id="quickBtn" class="toolbar-button" type="button" title="Find a block (Ctrl+K)"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Find block</button>
+    <button id="modeBtn" class="toolbar-button" type="button" title="Show advanced blocks">
+  <i class="fa-solid fa-cog" aria-hidden="true"></i>
+  <span id="modeLabel">Simple</span>
+</button>
     <button id="saveProjectBtn" class="toolbar-button accent-button" type="button" title="Save an editable copy (Ctrl+S)"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save blocks</button>
     <button id="loadProjectBtn" class="toolbar-button accent-button" type="button"><i class="fa-solid fa-folder-open" aria-hidden="true"></i>Open blocks</button>
     <input id="projectFileInput" class="sr-only" type="file" accept=".json,application/json">
@@ -474,7 +478,13 @@
       const autosaveKey = "ser.visualEditor.blocks.v5";
       const projectFormat = "ser-blockly-beginner-project";
       const projectVersion = 5;
-      const entryTypes = new Set(["ser_when_event", "ser_when_command", "ser_when_manual", "ser_when_item"]);
+      const entryTypes = new Set([
+        "ser_when_event",
+        "ser_when_command",
+        "ser_when_manual",
+        "ser_when_use_item",
+        "ser_when_equip_item"
+      ]);
       const waitTypes = new Set(["ser_wait", "ser_wait_until"]);
       const varBlocks = new Set(["ser_set_var", "ser_change_var", "ser_get_var", "ser_delete_var", "ser_count_loop", "ser_stopwatch_start", "ser_stopwatch_read", "ser_var_from_player", "ser_var_from_data", "ser_var_print"]);
       const varWriters = new Set(["ser_set_var", "ser_change_var", "ser_count_loop", "ser_stopwatch_start", "ser_var_from_player", "ser_var_from_data"]);
@@ -508,8 +518,14 @@
 
       SER.registerBlocks();
 
+      const modeKey = "ser.visualEditor.mode";
+      let editorMode = (() => {
+        try { return localStorage.getItem(modeKey) === "advanced" ? "advanced" : "simple"; }
+        catch { return "simple"; }
+      })();
+
       const workspace = Blockly.inject("blocklyDiv", {
-        toolbox: SER.buildToolbox(),
+        toolbox: SER.buildToolbox(editorMode),
         theme: custom,
         renderer: "zelos",
         sounds: false,
@@ -584,6 +600,32 @@
         anchor.remove();
         setTimeout(() => URL.revokeObjectURL(url), 0);
       }
+
+      function applyEditorMode() {
+      const label = document.getElementById("modeLabel");
+      const button = document.getElementById("modeBtn");
+      const advanced = editorMode === "advanced";
+      label.textContent = advanced ? "Advanced" : "Simple";
+      button.title = advanced
+        ? "Hide advanced blocks and go back to simple mode"
+        : "Show advanced blocks (data, functions, custom roles, audio, toys, and more)";
+      try {
+        workspace.updateToolbox(SER.buildToolbox(editorMode));
+      } catch (error) {
+        console.error("Could not rebuild the toolbox:", error);
+      }
+    }
+
+    document.getElementById("modeBtn").addEventListener("click", () => {
+      editorMode = editorMode === "advanced" ? "simple" : "advanced";
+      try { localStorage.setItem(modeKey, editorMode); } catch { /* storage may be blocked */ }
+      applyEditorMode();
+      showToast(editorMode === "advanced"
+        ? "Advanced mode: extra blocks are now in the toolbox."
+        : "Simple mode: only the everyday blocks are shown.");
+    });
+
+    applyEditorMode();
 
       function getWorkspaceState() {
         return {
@@ -681,17 +723,24 @@
             report("error", "A match block needs at least one case.", block);
           }
 
-          if (block.type === "ser_lights_color" && block.getFieldValue("COLOR").replace(/[^0-9a-fA-F]/g, "").length !== 6) {
-            report("error", "A light color needs exactly 6 hex digits, like FF0000.", block);
+          // if (block.type === "ser_lights_color" && block.getFieldValue("COLOR").replace(/[^0-9a-fA-F]/g, "").length !== 6) {
+          //   report("error", "A light color needs exactly 6 hex digits, like FF0000.", block);
+          // }
+
+          if (block.type === "ser_lights_set_color") {
+            const hex = block.getFieldValue("COLOR").replace(/[^0-9a-fA-F]/g, "");
+            if (hex.length !== 6) {
+              report("error", "A light color needs exactly 6 hex digits, like FF0000.", block);
+            }
           }
 
-          if (block.type === "ser_when_item" && block.getFieldValue("EVENT") === "UsedItem") {
-            const filter = block.getFieldValue("FILTER");
-            const exact = block.getFieldValue("EXACT");
-            const notUsable = ["coin", "firearm", "keycard", "customKeycard"].includes(filter)
-              || (filter === "exact" && /^(Keycard|Gun|Coin)/.test(exact));
-            if (notUsable) report("error", "Coins, keycards, and firearms can't be used. Pick 'equips' for them.", block);
-          }
+          // if (block.type === "ser_when_item" && block.getFieldValue("EVENT") === "UsedItem") {
+          //   const filter = block.getFieldValue("FILTER");
+          //   const exact = block.getFieldValue("EXACT");
+          //   const notUsable = ["coin", "firearm", "keycard", "customKeycard"].includes(filter)
+          //     || (filter === "exact" && /^(Keycard|Gun|Coin)/.test(exact));
+          //   if (notUsable) report("error", "Coins, keycards, and firearms can't be used. Pick 'equips' for them.", block);
+          // }
           if (["ser_check_reject", "ser_check_range"].includes(block.type) && entry?.type !== "ser_when_command") {
             report("warning", "Errors are only shown to someone who ran a command. Put this inside a 'When a player types a command' block.", block);
           }
@@ -709,14 +758,16 @@
           if (block.type === "ser_target") {
             const target = block.getFieldValue("TARGET");
             if (target.startsWith("@ev") && entry) {
-              if (!["ser_when_event", "ser_when_item"].includes(entry.type)) {
+              const eventName = entryEventName(entry);
+              if (!eventName) {
                 report("error", `${SER.targetLabels[target]} only exists inside an event.`, block);
-              } else if (!eventVariableNames(entry.getFieldValue("EVENT")).has(target)) {
-                report("error", `${SER.targetLabels[target]} doesn't exist in '${SER.eventLabels[entry.getFieldValue("EVENT")]}'. Pick another player.`, block);
+              } else if (!eventVariableNames(eventName).has(target)) {
+                const label = SER.eventLabels[eventName] || eventName;
+                report("error", `${SER.targetLabels[target]} doesn't exist in '${label}'. Pick another player.`, block);
               }
             }
             if (target === "@sender" && entry) {
-              if (entry.type === "ser_when_event" || entry.type === "ser_when_item") {
+              if (entry.type === "ser_when_event" || entry.type === "ser_when_use_item" || entry.type === "ser_when_equip_item") {
                 report("error", "The command user only exists inside a command.", block);
               } else if (entry.type === "ser_when_command" && entry.getFieldValue("AUDIENCE") === "Server") {
                 report("error", "A server console command has no player to use.", block);
@@ -753,6 +804,14 @@
 
         const seen = new Set();
         return found.filter(item => !seen.has(item.message) && seen.add(item.message));
+      }
+
+      function entryEventName(entry) {
+        if (!entry) return null;
+        if (entry.type === "ser_when_event") return entry.getFieldValue("EVENT");
+        if (entry.type === "ser_when_use_item") return "UsedItem";
+        if (entry.type === "ser_when_equip_item") return "ChangedItem";
+        return null;
       }
 
       function renderDiagnostics(diagnostics, hasCode) {
@@ -814,7 +873,9 @@
         if (!block) {
           const hasBlocks = workspace.getAllBlocks(false).length > 0;
           elements.lessonIcon.textContent = SER.glyph("f05a");
-          elements.lessonTitle.textContent = hasBlocks ? "Click a block to learn what it does" : "Start with a 'When' block";
+          elements.lessonTitle.textContent = hasBlocks
+            ? "Click a block to learn what it does"
+            : "Start with a 'When' block";
           elements.lessonText.textContent = hasBlocks
             ? "Its plain-language explanation will appear here."
             : "Every script needs a starting point: an event, a player command, or a manual run.";
@@ -823,7 +884,7 @@
         }
         elements.lessonIcon.textContent = block.serIcon ? SER.glyph(block.serIcon) : "";
         elements.lessonTitle.textContent = block.serTitle || block.type;
-        elements.lessonText.textContent = block.getTooltip?.() || "";
+        elements.lessonText.textContent = block.serTip || "";
         elements.lessonTip.textContent = block.serNote || "";
       }
 
@@ -976,6 +1037,7 @@
       function renderQuick(query) {
         const needle = query.trim().toLowerCase();
         const matches = SER.catalog
+          .filter(item => editorMode === "advanced" || !item.advanced)
           .filter(item => !needle || `${item.title} ${item.category} ${item.tip}`.toLowerCase().includes(needle))
           .slice(0, 40);
         quickList.replaceChildren();
@@ -1190,6 +1252,7 @@
         switchSidebarTab("templates");
       }
     })();
+
   </script>
 </body>
 </html>
