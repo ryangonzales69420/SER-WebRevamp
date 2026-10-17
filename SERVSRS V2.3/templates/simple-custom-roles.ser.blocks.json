@@ -1,0 +1,423 @@
+{
+  "format": "ser-blockly-beginner-project",
+  "version": 5,
+  "scriptName": "simple-custom-roles",
+  "workspace": {
+    "blocks": {
+      "languageVersion": 0,
+      "blocks": [
+        {
+          "type": "ser_when_event",
+          "id": "}Hds.R*~%zXv18LL{_M3",
+          "x": 530,
+          "y": 250,
+          "fields": {
+            "EVENT": "Spawned"
+          },
+          "inputs": {
+            "DO": {
+              "block": {
+                "type": "ser_if",
+                "id": "PdTgxzb9=o?DhV1*CCl[",
+                "extraState": {
+                  "mode": "any",
+                  "count": 1,
+                  "hasElse": false
+                },
+                "fields": {
+                  "MODE": "any"
+                },
+                "inputs": {
+                  "COND0": {
+                    "block": {
+                      "type": "ser_chance",
+                      "id": "MFE:?VH;AYT{Ma+]GREg",
+                      "fields": {
+                        "PERCENT": 50
+                      }
+                    }
+                  },
+                  "DO": {
+                    "block": {
+                      "type": "ser_stop",
+                      "id": "Z*S=]7d_#w7EZTPJ8CX;",
+                      "next": {
+                        "block": {
+                          "type": "ser_comment",
+                          "id": "6s*tp7At3?Kzb.@3,zN?",
+                          "fields": {
+                            "TEXT": "no custom role"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "next": {
+                  "block": {
+                    "type": "ser_if",
+                    "id": "kJ^=mLq9P}`dkpC-cYxC",
+                    "extraState": {
+                      "mode": "any",
+                      "count": 1,
+                      "hasElse": false
+                    },
+                    "fields": {
+                      "MODE": "any"
+                    },
+                    "inputs": {
+                      "COND0": {
+                        "block": {
+                          "type": "ser_chance",
+                          "id": "BG%~/7V{U87koS:y1b[W",
+                          "fields": {
+                            "PERCENT": 50
+                          }
+                        }
+                      },
+                      "DO": {
+                        "block": {
+                          "type": "ser_message",
+                          "id": "Z0n{BCD,F|N`[)Q?kdkU",
+                          "fields": {
+                            "STYLE": "small"
+                          },
+                          "inputs": {
+                            "TARGET": {
+                              "shadow": {
+                                "type": "ser_target",
+                                "id": "Q2al7Odn5Iuq?CHFY5l2",
+                                "fields": {
+                                  "TARGET": "@evPlayer"
+                                }
+                              }
+                            },
+                            "DURATION": {
+                              "shadow": {
+                                "type": "ser_duration",
+                                "id": "u]nQ$[k:B=W5]LkgdU:+",
+                                "fields": {
+                                  "AMOUNT": 30,
+                                  "UNIT": "s"
+                                }
+                              }
+                            },
+                            "TEXT": {
+                              "shadow": {
+                                "type": "ser_text",
+                                "id": "X0P0[r5+~0S$3s-x5s?Q",
+                                "fields": {
+                                  "TEXT": "You got a <b>common</b> custom role of <b>stronger</b><br/>- +<b>10</b> max HP"
+                                }
+                              }
+                            }
+                          },
+                          "next": {
+                            "block": {
+                              "type": "ser_set_max_health",
+                              "id": "Qigm1#Q:uCwyJAg=#aJX",
+                              "inputs": {
+                                "TARGET": {
+                                  "shadow": {
+                                    "type": "ser_target",
+                                    "id": "}gl`LT-2^oJ9Iy6E8]60",
+                                    "fields": {
+                                      "TARGET": "@evPlayer"
+                                    }
+                                  }
+                                },
+                                "AMOUNT": {
+                                  "shadow": {
+                                    "type": "ser_number",
+                                    "id": "z5TK//wBGx`eheV@sMt5",
+                                    "fields": {
+                                      "NUMBER": 110
+                                    }
+                                  }
+                                }
+                              },
+                              "next": {
+                                "block": {
+                                  "type": "ser_stop",
+                                  "id": "%]bjLFjXpOAMonyAM5W/"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "next": {
+                      "block": {
+                        "type": "ser_if",
+                        "id": "kkztU]Ogh3{inQdO73r$",
+                        "extraState": {
+                          "mode": "any",
+                          "count": 1,
+                          "hasElse": false
+                        },
+                        "fields": {
+                          "MODE": "any"
+                        },
+                        "inputs": {
+                          "COND0": {
+                            "block": {
+                              "type": "ser_chance",
+                              "id": "N9wRO79czAx@Q6f2zQ2u",
+                              "fields": {
+                                "PERCENT": 50
+                              }
+                            }
+                          },
+                          "DO": {
+                            "block": {
+                              "type": "ser_message",
+                              "id": "J);!.sC;|+v[N:mGRMM1",
+                              "fields": {
+                                "STYLE": "small"
+                              },
+                              "inputs": {
+                                "TARGET": {
+                                  "shadow": {
+                                    "type": "ser_target",
+                                    "id": "=jVf_3)j^|,bmS@dkSDG",
+                                    "fields": {
+                                      "TARGET": "@evPlayer"
+                                    }
+                                  }
+                                },
+                                "DURATION": {
+                                  "shadow": {
+                                    "type": "ser_duration",
+                                    "id": "79_vKmasvS8v.B^(#5*T",
+                                    "fields": {
+                                      "AMOUNT": 30,
+                                      "UNIT": "s"
+                                    }
+                                  }
+                                },
+                                "TEXT": {
+                                  "shadow": {
+                                    "type": "ser_text",
+                                    "id": "Ok0h,bf%a`S?ze4A4;??",
+                                    "fields": {
+                                      "TEXT": "You got a <b>uncommon</b> custom role of <b>speedy</b><br/>- -<b>10</b> max HP<br/>- +<b>10</b>% movement boost"
+                                    }
+                                  }
+                                }
+                              },
+                              "next": {
+                                "block": {
+                                  "type": "ser_give_effect",
+                                  "id": "`MgjLjWk0Evd|0$f/xdj",
+                                  "fields": {
+                                    "EFFECT": "MovementBoost"
+                                  },
+                                  "inputs": {
+                                    "TARGET": {
+                                      "shadow": {
+                                        "type": "ser_target",
+                                        "id": "lq[Lk)jRY[^gX=)Tj`4j",
+                                        "fields": {
+                                          "TARGET": "@evPlayer"
+                                        }
+                                      }
+                                    },
+                                    "DURATION": {
+                                      "shadow": {
+                                        "type": "ser_duration",
+                                        "id": "o,S,r_~t]0?o]ezj)}4f",
+                                        "fields": {
+                                          "AMOUNT": 1,
+                                          "UNIT": "h"
+                                        }
+                                      }
+                                    },
+                                    "INTENSITY": {
+                                      "shadow": {
+                                        "type": "ser_number",
+                                        "id": ";KlCKm4G?R?eU+3*m=K2",
+                                        "fields": {
+                                          "NUMBER": 1.1
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "next": {
+                                    "block": {
+                                      "type": "ser_stop",
+                                      "id": "3Sn]e%x[IBLSF/A*b8LJ"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "next": {
+                          "block": {
+                            "type": "ser_if",
+                            "id": "EKUnBP-L24]$}EkQwZ2^",
+                            "extraState": {
+                              "mode": "all",
+                              "count": 2,
+                              "hasElse": false
+                            },
+                            "fields": {
+                              "MODE": "all"
+                            },
+                            "inputs": {
+                              "COND0": {
+                                "block": {
+                                  "type": "ser_chance",
+                                  "id": "-Da_U}9]TWoy.B3BThES",
+                                  "fields": {
+                                    "PERCENT": 50
+                                  }
+                                }
+                              },
+                              "COND1": {
+                                "block": {
+                                  "type": "ser_has_role",
+                                  "id": "Vl8z}RYaKGu`Y)-V%$/)",
+                                  "fields": {
+                                    "ROLE": "NtfSergeant"
+                                  },
+                                  "inputs": {
+                                    "TARGET": {
+                                      "shadow": {
+                                        "type": "ser_target",
+                                        "id": "`Ov~L7r.@PxBuQty3c(`",
+                                        "fields": {
+                                          "TARGET": "@evPlayer"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "DO": {
+                                "block": {
+                                  "type": "ser_message",
+                                  "id": "3Xtn^ae}Jx|/Uh%KdK+O",
+                                  "fields": {
+                                    "STYLE": "small"
+                                  },
+                                  "inputs": {
+                                    "TARGET": {
+                                      "shadow": {
+                                        "type": "ser_target",
+                                        "id": "mT#XmK9P3j-{=_}w?X9X",
+                                        "fields": {
+                                          "TARGET": "@evPlayer"
+                                        }
+                                      }
+                                    },
+                                    "DURATION": {
+                                      "shadow": {
+                                        "type": "ser_duration",
+                                        "id": ";ZNx_Kk$ljXYcOf]6H1K",
+                                        "fields": {
+                                          "AMOUNT": 30,
+                                          "UNIT": "s"
+                                        }
+                                      }
+                                    },
+                                    "TEXT": {
+                                      "shadow": {
+                                        "type": "ser_text",
+                                        "id": "M.4}6f1{zIC%2NyYJw|D",
+                                        "fields": {
+                                          "TEXT": "You got a <b>rare</b> custom role of a <b>natural leader</b><br/>- +<b>25</b> max HP<br/>- <b>1x Anti 207</b> for 10 minutes"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "next": {
+                                    "block": {
+                                      "type": "ser_set_max_health",
+                                      "id": "UHzy[8#VpJ@rc$?YB,CM",
+                                      "inputs": {
+                                        "TARGET": {
+                                          "shadow": {
+                                            "type": "ser_target",
+                                            "id": "q{ZX]v_CN!7G]l/KSBDD",
+                                            "fields": {
+                                              "TARGET": "@evPlayer"
+                                            }
+                                          }
+                                        },
+                                        "AMOUNT": {
+                                          "shadow": {
+                                            "type": "ser_number",
+                                            "id": "TF_]U,YZkW7wc7]~yttw",
+                                            "fields": {
+                                              "NUMBER": 125
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "next": {
+                                        "block": {
+                                          "type": "ser_give_effect",
+                                          "id": "C9I)L=Z{]=DQp4lO-),m",
+                                          "fields": {
+                                            "EFFECT": "AntiScp207"
+                                          },
+                                          "inputs": {
+                                            "TARGET": {
+                                              "shadow": {
+                                                "type": "ser_target",
+                                                "id": "6OXxnq*y-U|{d?U`y:%H",
+                                                "fields": {
+                                                  "TARGET": "@evPlayer"
+                                                }
+                                              }
+                                            },
+                                            "DURATION": {
+                                              "shadow": {
+                                                "type": "ser_duration",
+                                                "id": "PVl7WF:H|+A9QnNfD/sV",
+                                                "fields": {
+                                                  "AMOUNT": 10,
+                                                  "UNIT": "m"
+                                                }
+                                              }
+                                            },
+                                            "INTENSITY": {
+                                              "shadow": {
+                                                "type": "ser_number",
+                                                "id": "?VX@fSHh]:|qqY5n5x^T",
+                                                "fields": {
+                                                  "NUMBER": 1
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "next": {
+                                            "block": {
+                                              "type": "ser_stop",
+                                              "id": "lsvMLFhx+k?*V+ozF{aI"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

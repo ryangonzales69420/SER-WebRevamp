@@ -137,6 +137,8 @@
     return code + (thisOnly || !next ? "" : this.blockToCode(next));
   };
 
+  gen.init = function () { condFlagCounter = 0; };
+
   const valueOf = (block, name) => gen.valueToCode(block, name, gen.ORDER_ATOMIC) || "...";
   const conditionOf = (block, name = "COND") => gen.valueToCode(block, name, gen.ORDER_NONE) || "...";
   const bodyOf = (block, name) => gen.statementToCode(block, name);
@@ -1095,27 +1097,52 @@
     code: block => [`{Toy.Info *${cleanName(block.getFieldValue("NAME"), "toy")} ${block.getFieldValue("PROP")}}`, gen.ORDER_ATOMIC]
   });
 
-  def({
+    def({
     id: "ser_if", cat: "logic", kind: "statement", icon: "f126", title: "If",
-    tip: "Runs the blocks inside when the conditions are true. Press + to add a condition, − to remove one.",
+    tip: "Runs the blocks inside when the conditions are true. Left +/- adds/removes conditions; right +/- adds/removes elseif branches (up to 20).",
     note: "'Any of these' joins conditions with or; 'all of these' joins them with and. Press + by 'otherwise' to add an else.",
     parts: [],
     code: (block, g) => {
+      const mode = block.serMode || "any";
       const count = block.serCount || 1;
-      const conditions = Array.from({ length: count }, (_, index) => g.valueToCode(block, `COND${index}`, g.ORDER_NONE) || "...");
-      const body = g.statementToCode(block, "DO");
-      const elseBody = block.getInput("ELSE") ? g.statementToCode(block, "ELSE") : "";
-      if (block.serMode === "all") {
-        const nest = index => {
-          if (index === conditions.length) return body;
-          return `if ${conditions[index]}\n${nest(index + 1)}${elseBody ? `else\n${elseBody}` : ""}end\n`;
-        };
-        return nest(0);
+      const conds = [];
+      for (let i = 0; i < count; i++) conds.push(block.getInputTargetBlock(`COND${i}`));
+      const body = unindent(g.statementToCode(block, "DO"));
+
+      const elifCount = block.serElifCount || 0;
+      const elifs = [];
+      for (let i = 0; i < elifCount; i++) {
+        elifs.push({
+          cond: block.getInputTargetBlock(`ELIF${i}_COND`),
+          body: unindent(g.statementToCode(block, `ELIF${i}_DO`))
+        });
       }
-      let code = `if ${conditions[0]}\n${body}`;
-      for (let index = 1; index < conditions.length; index++) code += `elif ${conditions[index]}\n${body}`;
-      if (elseBody) code += `else\n${elseBody}`;
-      return `${code}end\n`;
+      const elseBody = block.getInput("ELSE") ? unindent(g.statementToCode(block, "ELSE")) : "";
+
+      const buildChain = index => {
+        if (index >= elifs.length) return elseBody;
+        const e = elifs[index];
+        return emitCondition(e.cond, e.body, buildChain(index + 1));
+      };
+      const chain = buildChain(0);
+
+      const flagVar = `$${nextCondFlag()}`;
+      let code = "";
+      if (mode === "any") {
+        code += `${flagVar} = false\n`;
+        for (const c of conds) {
+          const inner = emitCondition(c, `${flagVar} = true`, "");
+          code += `if ${flagVar} is false\n${indentMultiline(inner)}end\n`;
+        }
+      } else {
+        code += `${flagVar} = true\n`;
+        for (const c of conds) {
+          const inner = emitCondition(c, "", `${flagVar} = false`);
+          code += `if ${flagVar}\n${indentMultiline(inner)}end\n`;
+        }
+      }
+      code += `if ${flagVar}\n${indentMultiline(body)}${chain ? `else\n${indentMultiline(chain)}` : ""}end\n`;
+      return code;
     },
     custom: "if"
   });
@@ -2103,8 +2130,79 @@
     code: (block, g) => `!-- OnUCR ${block.getFieldValue("EVENT")}\n\n${unindent(g.statementToCode(block, "DO"))}`
   });
 
+    def({
+    id: "ser_logic_group",
+    cat: "logic",
+    kind: "value",
+    output: "Boolean",
+    icon: "f0c9",
+    title: "Group conditions",
+    tip: "Combines multiple conditions with AND or OR. Nest these to build things like (A and (B or C)).",
+    note: "Plug this into an If, While, Wait until, or Reject condition.",
+    parts: [],
+    defaults: {
+      // COND0: ["ser_boolean", { VALUE: "true" }],
+      // COND1: ["ser_boolean", { VALUE: "false" }]
+    },
+    code: block => {
+      const mode = block.serMode || "all";
+      const op = mode === "all" ? "and" : "or";
+      const count = block.serCount || 1;
+      const parts = [];
+      for (let i = 0; i < count; i++) {
+        const c = gen.valueToCode(block, `COND${i}`, gen.ORDER_NONE);
+        if (c) parts.push(`(${c})`);
+      }
+      if (!parts.length) return [mode === "all" ? "true" : "false", gen.ORDER_ATOMIC];
+      return [parts.join(` ${op} `), gen.ORDER_NONE];
+    },
+    custom: "logic_group"
+  });
+
+
   const specById = Object.fromEntries(specs.map(spec => [spec.id, spec]));
 
+    // ===== Condition unfolding helpers (nested AND/OR) =====
+  let condFlagCounter = 0;
+  const nextCondFlag = () => `__ser_cond${++condFlagCounter}`;
+  const indentMultiline = text =>
+    text ? text.split("\n").map(line => (line ? indent + line : line)).join("\n") : "";
+
+  function emitCondition(condBlock, thenCode, elseCode) {
+    if (!condBlock) return thenCode;
+    if (condBlock.type === "ser_logic_group") {
+      return emitLogicGroup(condBlock, thenCode, elseCode);
+    }
+    const generated = gen.blockToCode(condBlock);
+    const condExpr = Array.isArray(generated) ? generated[0] : generated;
+    return `if ${condExpr || "..."}\n${indentMultiline(thenCode)}${elseCode ? `else\n${indentMultiline(elseCode)}` : ""}end\n`;
+  }
+
+  function emitLogicGroup(groupBlock, thenCode, elseCode) {
+    const mode = groupBlock.serMode || "all";
+    const count = groupBlock.serCount || 1;
+    const subs = [];
+    for (let i = 0; i < count; i++) subs.push(groupBlock.getInputTargetBlock(`COND${i}`));
+    const flagVar = `$${nextCondFlag()}`;
+    let code = "";
+    if (mode === "any") {
+      code += `${flagVar} = false\n`;
+      for (const sub of subs) {
+        const inner = emitCondition(sub, `${flagVar} = true`, "");
+        code += `if ${flagVar} is false\n${indentMultiline(inner)}end\n`;
+      }
+    } else {
+      code += `${flagVar} = true\n`;
+      for (const sub of subs) {
+        const inner = emitCondition(sub, "", `${flagVar} = false`);
+        code += `if ${flagVar}\n${indentMultiline(inner)}end\n`;
+      }
+    }
+    code += `if ${flagVar}\n${indentMultiline(thenCode)}${elseCode ? `else\n${indentMultiline(elseCode)}` : ""}end\n`;
+    return code;
+  }
+
+  // ===== If block =====
   function renderIf(block) {
     const kept = {};
     for (const input of block.inputList) {
@@ -2116,25 +2214,47 @@
 
     const mode = block.serMode || "any";
     const count = block.serCount || 1;
+    const elifCount = block.serElifCount || 0;
+
     const head = block.appendDummyInput("HEAD").appendField("if");
-    head.appendField(new Blockly.FieldDropdown([["any of these", "any"], ["all of these", "all"]], value => {
-      if (value !== block.serMode) {
-        block.serMode = value;
-        Promise.resolve().then(() => renderIf(block));
+    head.appendField(new Blockly.FieldDropdown(
+      [["any of these", "any"], ["all of these", "all"]],
+      value => {
+        if (value !== block.serMode) {
+          block.serMode = value;
+          Promise.resolve().then(() => renderIf(block));
+        }
+        return value;
       }
-      return value;
-    }), "MODE");
+    ), "MODE");
     block.getField("MODE").setValue(mode);
-    head.appendField(new Blockly.FieldImage(plusIcon, 16, 16, "add a condition", () => block.serAddCondition()), "ADD_CONDITION");
-    head.appendField(new Blockly.FieldImage(minusIcon, 16, 16, "remove a condition", () => block.serRemoveCondition()), "REMOVE_CONDITION");
+    head.appendField(new Blockly.FieldImage(plusIcon, 16, 16, "add a condition",
+      () => block.serAddCondition()), "ADD_CONDITION");
+    head.appendField(new Blockly.FieldImage(minusIcon, 16, 16, "remove a condition",
+      () => block.serRemoveCondition()), "REMOVE_CONDITION");
+    head.appendField(new Blockly.FieldImage(plusIcon, 16, 16, "add an elseif branch",
+      () => block.serAddElif()), "ADD_ELIF");
+    head.appendField(new Blockly.FieldImage(minusIcon, 16, 16, "remove the last elseif",
+      () => block.serRemoveElif()), "REMOVE_ELIF");
+
     for (let index = 0; index < count; index++) {
       if (index > 0) block.appendDummyInput(`JOIN${index}`).appendField(mode === "all" ? "and" : "or");
       block.appendValueInput(`COND${index}`).setCheck("Boolean");
     }
     block.appendDummyInput("THEN").appendField("then");
     block.appendStatementInput("DO").setCheck(actionCheck);
+
+    for (let index = 0; index < elifCount; index++) {
+      block.appendDummyInput(`ELIF_HEAD${index}`).appendField("elseif");
+      block.appendValueInput(`ELIF${index}_COND`).setCheck("Boolean");
+      block.appendDummyInput(`ELIF_THEN${index}`).appendField("then");
+      block.appendStatementInput(`ELIF${index}_DO`).setCheck(actionCheck);
+    }
+
     block.appendDummyInput("ELSE_ROW").appendField("otherwise").appendField(
-      new Blockly.FieldImage(block.serElse ? minusIcon : plusIcon, 16, 16, block.serElse ? "remove the else part" : "add an else part", () => block.serToggleElse()),
+      new Blockly.FieldImage(block.serElse ? minusIcon : plusIcon, 16, 16,
+        block.serElse ? "remove the else part" : "add an else part",
+        () => block.serToggleElse()),
       "ELSE_TOGGLE"
     );
     if (block.serElse) block.appendStatementInput("ELSE").setCheck(actionCheck);
@@ -2152,11 +2272,31 @@
   const ifMethods = {
     serAddCondition() { this.serCount = (this.serCount || 1) + 1; renderIf(this); },
     serRemoveCondition() { if ((this.serCount || 1) > 1) { this.serCount -= 1; renderIf(this); } },
+    serAddElif() {
+      if ((this.serElifCount || 0) < 20) {
+        this.serElifCount = (this.serElifCount || 0) + 1;
+        renderIf(this);
+      }
+    },
+    serRemoveElif() {
+      if ((this.serElifCount || 0) > 0) {
+        this.serElifCount -= 1;
+        renderIf(this);
+      }
+    },
     serToggleElse() { this.serElse = !this.serElse; renderIf(this); },
-    saveExtraState() { return { mode: this.serMode || "any", count: this.serCount || 1, hasElse: Boolean(this.serElse) }; },
+    saveExtraState() {
+      return {
+        mode: this.serMode || "any",
+        count: this.serCount || 1,
+        elifCount: this.serElifCount || 0,
+        hasElse: Boolean(this.serElse)
+      };
+    },
     loadExtraState(state) {
       this.serMode = state.mode || "any";
       this.serCount = state.count || 1;
+      this.serElifCount = state.elifCount || 0;
       this.serElse = Boolean(state.hasElse);
       renderIf(this);
     },
@@ -2164,17 +2304,87 @@
       const element = Blockly.utils.xml.createElement("mutation");
       element.setAttribute("mode", this.serMode || "any");
       element.setAttribute("count", String(this.serCount || 1));
+      element.setAttribute("elifCount", String(this.serElifCount || 0));
       element.setAttribute("else", this.serElse ? "1" : "0");
       return element;
     },
     domToMutation(element) {
       this.serMode = element.getAttribute("mode") || "any";
       this.serCount = Number(element.getAttribute("count")) || 1;
+      this.serElifCount = Number(element.getAttribute("elifCount")) || 0;
       this.serElse = element.getAttribute("else") === "1";
       renderIf(this);
     }
   };
   specById.ser_if.extra = ifMethods;
+
+  // ===== Group conditions block =====
+  function renderLogicGroup(block) {
+    const kept = {};
+    for (const input of block.inputList) {
+      const child = input.connection && input.connection.targetBlock();
+      if (input.name && child) kept[input.name] = child;
+    }
+    for (const child of Object.values(kept)) child.unplug(false);
+    for (const input of [...block.inputList]) if (input.name) block.removeInput(input.name, true);
+
+    const mode = block.serMode || "all";
+    const count = block.serCount || 1;
+
+    const head = block.appendDummyInput("HEAD");
+    head.appendField(new Blockly.FieldDropdown(
+      [["all of", "all"], ["any of", "any"]],
+      value => {
+        if (value !== block.serMode) {
+          block.serMode = value;
+          Promise.resolve().then(() => renderLogicGroup(block));
+        }
+        return value;
+      }
+    ), "MODE");
+    block.getField("MODE").setValue(mode);
+    head.appendField(new Blockly.FieldImage(plusIcon, 16, 16, "add a condition",
+      () => block.serAddCondition()), "ADD_CONDITION");
+    head.appendField(new Blockly.FieldImage(minusIcon, 16, 16, "remove a condition",
+      () => block.serRemoveCondition()), "REMOVE_CONDITION");
+
+    for (let index = 0; index < count; index++) {
+      if (index > 0) block.appendDummyInput(`JOIN${index}`).appendField(mode === "all" ? "and" : "or");
+      block.appendValueInput(`COND${index}`).setCheck("Boolean");
+    }
+
+    for (const [name, child] of Object.entries(kept)) {
+      const input = block.getInput(name);
+      if (input && input.connection) {
+        input.connection.connect(child.outputConnection || child.previousConnection);
+      } else {
+        child.dispose(false);
+      }
+    }
+  }
+
+  const logicGroupMethods = {
+    serAddCondition() { this.serCount = (this.serCount || 1) + 1; renderLogicGroup(this); },
+    serRemoveCondition() { if ((this.serCount || 1) > 1) { this.serCount -= 1; renderLogicGroup(this); } },
+    saveExtraState() { return { mode: this.serMode || "all", count: this.serCount || 1 }; },
+    loadExtraState(state) {
+      this.serMode = state.mode || "all";
+      this.serCount = state.count || 1;
+      renderLogicGroup(this);
+    },
+    mutationToDom() {
+      const element = Blockly.utils.xml.createElement("mutation");
+      element.setAttribute("mode", this.serMode || "all");
+      element.setAttribute("count", String(this.serCount || 1));
+      return element;
+    },
+    domToMutation(element) {
+      this.serMode = element.getAttribute("mode") || "all";
+      this.serCount = Number(element.getAttribute("count")) || 1;
+      renderLogicGroup(this);
+    }
+  };
+  specById.ser_logic_group.extra = logicGroupMethods;
 
   function shadowInputs(defaults) {
     return Object.fromEntries(
@@ -2256,7 +2466,7 @@
     }
   }
 
-  function registerBlocks() {
+    function registerBlocks() {
     for (const spec of specs) {
       const definition = {
         init() {
@@ -2264,8 +2474,13 @@
           if (spec.id === "ser_if") {
             this.serMode = "any";
             this.serCount = 1;
+            this.serElifCount = 0;
             this.serElse = false;
             renderIf(this);
+          } else if (spec.id === "ser_logic_group") {
+            this.serMode = "all";
+            this.serCount = 2;
+            renderLogicGroup(this);
           }
         }
       };
