@@ -5,7 +5,6 @@
   const actionCheck = "SER_ACTION";
   const playerCheck = "Player";
   const anyValue = ["Number", "String", "Duration", "Player"];
-  const groupTargets = new Set(["@all", "@alivePlayers", "@scpPlayers", "@classDPlayers"]);
   const colours = { start: 45, players: 60, messages: 161, world: 3, logic: 285, server: 208, variables: 265, libraries: 42 };
   const categories = [
     ["start", "Start"], ["players", "Players"], ["messages", "Messages"], ["world", "World"],
@@ -19,10 +18,28 @@
   };
 
   const targetOptions = [
-    ["all players", "@all"], ["living players", "@alivePlayers"], ["SCP players", "@scpPlayers"],
-    ["Class-D players", "@classDPlayers"], ["the event player", "@evPlayer"], ["the event attacker", "@evAttacker"],
-    ["the command user", "@sender"]
+    ["all players", "@all"], ["living players", "@alivePlayers"], ["dead players", "@deadPlayers"],
+    ["other living players", "@otherAlivePlayers"], ["SCP players", "@scpPlayers"],
+    ["MTF (Foundation Forces)", "@foundationForcePlayers"], ["Chaos Insurgency", "@chaosInsurgencyPlayers"],
+    ["NTF captains", "@ntfCaptainPlayers"], ["NTF sergeants", "@ntfSergeantPlayers"],
+    ["NTF privates", "@ntfPrivatePlayers"], ["NTF specialists", "@ntfSpecialistPlayers"],
+    ["Chaos conscripts", "@chaosConscriptPlayers"], ["Chaos riflemen", "@chaosRiflemanPlayers"],
+    ["Chaos marauders", "@chaosMarauderPlayers"], ["Chaos repressors", "@chaosRepressorPlayers"],
+    ["Facility guards", "@facilityGuardPlayers"], ["Scientists", "@scientistPlayers"],
+    ["Class-D players", "@classDPlayers"], ["Overwatch", "@overwatchPlayers"],
+    ["Tutorial players", "@tutorialPlayers"], ["Spectators", "@spectatorPlayers"], ["Filmmakers", "@filmmakerPlayers"],
+    ["Custom role players", "@customRolePlayers"], ["NPC players", "@npcPlayers"],
+    ["SCP-049", "@scp049Players"], ["SCP-0492", "@scp0492Players"], ["SCP-079", "@scp079Players"],
+    ["SCP-096", "@scp096Players"], ["SCP-106", "@scp106Players"], ["SCP-173", "@scp173Players"],
+    ["SCP-939", "@scp939Players"], ["SCP-3114", "@scp3114Players"],
+    ["Flamingos", "@flamingoPlayers"], ["Alpha Flamingos", "@alphaFlamingoPlayers"], ["Chaos Flamingos", "@chaosFlamingoPlayers"],
+    ["NTF Flamingos", "@ntfFlamingoPlayers"], ["Zombie Flamingos", "@zombieFlamingoPlayers"],
+    ["Light containment players", "@lightContainmentPlayers"], ["Heavy containment players", "@heavyContainmentPlayers"],
+    ["Entrance zone players", "@entrancePlayers"], ["Surface players", "@surfacePlayers"], ["Other zone players", "@otherPlayers"],
+    ["the event player", "@evPlayer"], ["the event attacker", "@evAttacker"], ["the command user", "@sender"],
+    ["named player variable", "@custom"]
   ];
+  const groupTargets = new Set(targetOptions.map(([, value]) => value).filter(value => !["@evPlayer", "@evAttacker", "@sender", "@custom"].includes(value)));
   const targetLabels = Object.fromEntries(targetOptions.map(([label, value]) => [value, label]));
   const boolOptions = [["on", "true"], ["off", "false"]];
   const durationUnits = [["milliseconds", "ms"], ["seconds", "s"], ["minutes", "m"], ["hours", "h"]];
@@ -139,6 +156,7 @@
 
   gen.init = function () { condFlagCounter = 0; };
 
+  const scriptName = (block, name) => cleanName(textPart(block, name), "myScript");
   const valueOf = (block, name) => gen.valueToCode(block, name, gen.ORDER_ATOMIC) || "...";
   const conditionOf = (block, name = "COND") => gen.valueToCode(block, name, gen.ORDER_NONE) || "...";
   const bodyOf = (block, name) => gen.statementToCode(block, name);
@@ -182,9 +200,31 @@
     if (scope === "round") return `"${textPart(block, keyName)}_{$roundStamp}"`;
     return valueOf(block, keyName);
   };
+  const targetName = block => {
+    const name = block.getFieldValue("TARGET");
+    if (name === "@custom") return `@${cleanName(block.getFieldValue("CUSTOM"), "p")}`;
+    const root = block.getRootBlock ? block.getRootBlock() : block;
+    return name === "@evPlayer" && root.type === "ser_when_command" ? "@sender" : name;
+  };
   const usedTargets = root => [...new Set(
-    root.getDescendants(false).filter(block => block.type === "ser_target").map(block => block.getFieldValue("TARGET"))
+    root.getDescendants(false).filter(block => block.type === "ser_target").map(targetName)
   )].sort();
+  const hatVariables = block => {
+    const details = (table, key) => ((table[key] || {}).variables || []).map(variable => variable.name);
+    switch (block.type) {
+      case "ser_when_event": return details(SER_TRUTH_TABLE.eventDetails, block.getFieldValue("EVENT"));
+      case "ser_when_use_item": return ["@evPlayer", "*evUsableItem"];
+      case "ser_when_equip_item": return ["@evPlayer", "*evOldItem", "*evNewItem"];
+      case "ser_when_command": return ["@sender"];
+      case "ser_lib_crole_event": return ["@evPlayer", "*evCRole"];
+      case "ser_lib_ucr_event": return details(SER_TRUTH_TABLE.ucrEventDetails, block.getFieldValue("EVENT"));
+      default: return [];
+    }
+  };
+  const scopedWarnings = (names, provided) => names
+    .filter(name => (name.startsWith("@ev") || name === "@sender") && !provided.includes(name))
+    .map(name => `# WARNING: ${name} does not exist in this script, so pick a different target or trigger\n`)
+    .join("");
   const isEveryone = (block, name) => {
     const target = block.getInputTargetBlock(name);
     return Boolean(target && target.type === "ser_target" && target.getFieldValue("TARGET") === "@all");
@@ -231,9 +271,11 @@
     tip: "Runs the blocks inside whenever the chosen event happens.",
     parts: ["When", dd("EVENT", eventOptions), "do", { body: "DO" }],
     code: (block, g) => {
-      const required = usedTargets(block).filter(target => target.startsWith("@ev"));
+      const provided = hatVariables(block);
+      const used = usedTargets(block);
+      const required = used.filter(name => name.startsWith("@ev") && provided.includes(name));
       const requireLine = required.length ? `-- require ${required.join(" ")}\n` : "";
-      return `!-- OnEvent ${block.getFieldValue("EVENT")}\n${requireLine}\n${unindent(g.statementToCode(block, "DO"))}`;
+      return `!-- OnEvent ${block.getFieldValue("EVENT")}\n${requireLine}\n${scopedWarnings(used, provided)}${unindent(g.statementToCode(block, "DO"))}`;
     }
   });
 
@@ -245,7 +287,7 @@
     code: (block, g) => {
       const test = itemFilterTest("evUsableItem", block.getFieldValue("FILTER"));
       const body = g.statementToCode(block, "DO");
-      return `!-- OnEvent UsedItem\n-- require @evPlayer *evUsableItem\n\n${test ? `if ${test}\n${body}end\n` : unindent(body)}`;
+      return `!-- OnEvent UsedItem\n-- require @evPlayer *evUsableItem\n\n${scopedWarnings(usedTargets(block), hatVariables(block))}${test ? `if ${test}\n${body}end\n` : unindent(body)}`;
     }
   });
 
@@ -257,7 +299,7 @@
     code: (block, g) => {
       const test = itemFilterTest("evNewItem", block.getFieldValue("FILTER"));
       const body = g.statementToCode(block, "DO");
-      return `!-- OnEvent ChangedItem\n-- require @evPlayer *evNewItem\n\n${test ? `if ${test}\n${body}end\n` : unindent(body)}`;
+      return `!-- OnEvent ChangedItem\n-- require @evPlayer *evNewItem\n\n${scopedWarnings(usedTargets(block), hatVariables(block))}${test ? `if ${test}\n${body}end\n` : unindent(body)}`;
     }
   });
 
@@ -267,8 +309,9 @@
     note: "Spaces and symbols are removed from the command name.",
     parts: ["Command", tf("COMMAND", "heal"), "from", dd("AUDIENCE", [["players", "Player"], ["Remote Admin", "RemoteAdmin"], ["server console", "Server"]]), "do", { body: "DO" }],
     code: (block, g) => {
-      const senderLine = usedTargets(block).includes("@sender") ? "-- requireSender\n" : "";
-      return `!-- CustomCommand ${cleanName(block.getFieldValue("COMMAND"), "command")}\n-- availableFor ${block.getFieldValue("AUDIENCE")}\n${senderLine}\n${unindent(g.statementToCode(block, "DO"))}`;
+      const used = usedTargets(block);
+      const senderLine = used.includes("@sender") ? "-- requireSender\n" : "";
+      return `!-- CustomCommand ${cleanName(block.getFieldValue("COMMAND"), "command")}\n-- availableFor ${block.getFieldValue("AUDIENCE")}\n${senderLine}\n${scopedWarnings(used, hatVariables(block))}${unindent(g.statementToCode(block, "DO"))}`;
     }
   });
 
@@ -276,14 +319,14 @@
     id: "ser_when_manual", cat: "start", kind: "hat", icon: "f144", title: "When I run it by hand",
     tip: "No automatic trigger. Run this script manually from the server or Remote Admin.",
     parts: ["When I run this by hand, do", { body: "DO" }],
-    code: (block, g) => unindent(g.statementToCode(block, "DO"))
+    code: (block, g) => `${scopedWarnings(usedTargets(block), [])}${unindent(g.statementToCode(block, "DO"))}`
   });
 
   def({
     id: "ser_target", cat: "players", kind: "value", output: playerCheck, icon: "f0c0", title: "Players",
     tip: "Chooses which player or group an action affects.",
-    parts: [dd("TARGET", targetOptions)],
-    code: block => [block.getFieldValue("TARGET"), gen.ORDER_ATOMIC]
+    parts: [dd("TARGET", targetOptions), tf("CUSTOM", "p")],
+    code: block => [targetName(block), gen.ORDER_ATOMIC]
   });
 
   def({
@@ -1104,45 +1147,25 @@
     parts: [],
     code: (block, g) => {
       const mode = block.serMode || "any";
-      const count = block.serCount || 1;
       const conds = [];
-      for (let i = 0; i < count; i++) conds.push(block.getInputTargetBlock(`COND${i}`));
+      for (let i = 0; i < (block.serCount || 1); i++) {
+        const cond = block.getInputTargetBlock(`COND${i}`);
+        if (cond) conds.push(cond);
+      }
       const body = unindent(g.statementToCode(block, "DO"));
-
-      const elifCount = block.serElifCount || 0;
       const elifs = [];
-      for (let i = 0; i < elifCount; i++) {
-        elifs.push({
-          cond: block.getInputTargetBlock(`ELIF${i}_COND`),
-          body: unindent(g.statementToCode(block, `ELIF${i}_DO`))
-        });
+      for (let i = 0; i < (block.serElifCount || 0); i++) {
+        const cond = block.getInputTargetBlock(`ELIF${i}_COND`);
+        if (cond) elifs.push({ cond, body: unindent(g.statementToCode(block, `ELIF${i}_DO`)) });
       }
       const elseBody = block.getInput("ELSE") ? unindent(g.statementToCode(block, "ELSE")) : "";
-
-      const buildChain = index => {
-        if (index >= elifs.length) return elseBody;
-        const e = elifs[index];
-        return emitCondition(e.cond, e.body, buildChain(index + 1));
-      };
+      const buildChain = index => (index >= elifs.length
+        ? elseBody
+        : emitCondition(elifs[index].cond, elifs[index].body, buildChain(index + 1)));
       const chain = buildChain(0);
-
       const flagVar = `$${nextCondFlag()}`;
-      let code = "";
-      if (mode === "any") {
-        code += `${flagVar} = false\n`;
-        for (const c of conds) {
-          const inner = emitCondition(c, `${flagVar} = true`, "");
-          code += `if ${flagVar} is false\n${indentMultiline(inner)}end\n`;
-        }
-      } else {
-        code += `${flagVar} = true\n`;
-        for (const c of conds) {
-          const inner = emitCondition(c, "", `${flagVar} = false`);
-          code += `if ${flagVar}\n${indentMultiline(inner)}end\n`;
-        }
-      }
-      code += `if ${flagVar}\n${indentMultiline(body)}${chain ? `else\n${indentMultiline(chain)}` : ""}end\n`;
-      return code;
+      return computeFlag(conds, mode, flagVar)
+        + `if ${flagVar}\n${indentMultiline(ensureLine(body))}${chain ? `else\n${indentMultiline(ensureLine(chain))}` : ""}end\n`;
     },
     custom: "if"
   });
@@ -1195,7 +1218,16 @@
     tip: "Repeats the blocks inside while the condition stays true.",
     note: "Use 'true' as the condition to repeat forever. Add a wait inside so the server keeps running.",
     parts: ["while", inputOf("COND", "Boolean"), "do", { body: "DO" }],
-    code: block => `while ${conditionOf(block)}\n${bodyOf(block, "DO")}end\n`
+    code: block => {
+      const cond = block.getInputTargetBlock("COND");
+      const body = bodyOf(block, "DO");
+      if (cond && cond.type === "ser_logic_group") {
+        const flagVar = `$${nextCondFlag()}`;
+        return `while true\n${indentMultiline(computeFlag(groupConds(cond), cond.serMode || "all", flagVar))}${indent}if ${flagVar} is false\n${indent}${indent}break\n${indent}end\n${body}end\n`;
+      }
+      if (!cond) return "";
+      return `while ${conditionOf(block)}\n${body}end\n`;
+    }
   });
 
   def({
@@ -1210,7 +1242,7 @@
     id: "ser_wait_until", cat: "logic", kind: "statement", icon: "f252", title: "Wait until",
     tip: "Pauses until the condition becomes true.",
     parts: ["wait until", inputOf("COND", "Boolean")],
-    code: block => `wait_until ${conditionOf(block)}\n`
+    code: block => (block.getInputTargetBlock("COND") ? `wait_until ${conditionOf(block)}\n` : "")
   });
 
   def({
@@ -1240,7 +1272,7 @@
     note: "Put this near the top of a command to check the input before anything else runs.",
     parts: ["reject if", inputOf("COND", "Boolean"), "with error", inputOf("TEXT", "String")],
     defaults: { TEXT: txt("That did not work.") },
-    code: block => `if ${conditionOf(block)}\n${indent}Error ${valueOf(block, "TEXT")}\n${indent}stop\nend\n`
+    code: block => emitCondition(block.getInputTargetBlock("COND"), `Error ${valueOf(block, "TEXT")}\nstop\n`, "")
   });
 
   def({
@@ -1268,7 +1300,7 @@
     id: "ser_comment", cat: "logic", kind: "statement", icon: "f249", title: "Comment",
     tip: "A note to yourself. Never runs.",
     parts: ["note:", tf("TEXT", "explain what this does")],
-    code: block => `-- ${String(block.getFieldValue("TEXT")).replace(/[\r\n]+/g, " ")}\n`
+    code: block => `# ${String(block.getFieldValue("TEXT")).replace(/[\r\n]+/g, " ")}\n`
   });
 
   def({
@@ -1468,7 +1500,7 @@
       const name = cleanName(block.getFieldValue("NAME"), "myFunction");
       const body = g.statementToCode(block, "DO");
       const args = [block.getFieldValue("ARG1"), block.getFieldValue("ARG2")].map(arg => cleanName(arg, "")).filter(Boolean).map(arg => `$${arg}`);
-      return `func $${name}${args.length ? ` with ${args.join(" ")}` : ""}\n${body}end\n`;
+      return `func $${name}${args.length ? ` with ${args.join(" ")}` : ""}\n${scopedWarnings(usedTargets(block), [])}${body}end\n`;
     }
   });
 
@@ -1479,7 +1511,7 @@
     parts: ["define callback function", tf("NAME", "onRoleEvent"), { body: "DO" }],
     code: (block, g) => {
       const name = cleanName(block.getFieldValue("NAME"), "onRoleEvent");
-      return `func ${name} with @player *role\n${g.statementToCode(block, "DO")}end\n`;
+      return `func ${name} with @player *role\n${scopedWarnings(usedTargets(block), [])}${g.statementToCode(block, "DO")}end\n`;
     }
   });
 
@@ -1488,7 +1520,7 @@
     tip: "Sends a value back from the function it is inside.",
     note: "Use it only inside 'Define function'.",
     parts: ["return", inputOf("VALUE", null)],
-    code: block => `return ${valueOf(block, "VALUE")}\n`
+    code: block => (block.getInputTargetBlock("VALUE") ? `return ${valueOf(block, "VALUE")}\n` : "return\n")
   });
 
   [0, 1, 2].forEach(count => {
@@ -1713,7 +1745,7 @@
       if (block.getFieldValue("MODE") === "add") {
         return `SetPlayerData ${target} ${key} {{GetPlayerData ${target} ${key} 0} + ${inside(valueOf(block, "VALUE"))}}\n`;
       }
-      return `SetPlayerData ${target} ${key} {{GetPlayerData ${target} ${key} 0} + ${valueOf(block, "VALUE")}}\n`;
+      return `SetPlayerData ${target} ${key} ${valueOf(block, "VALUE")}\n`;
     }
   });
 
@@ -1817,7 +1849,7 @@
     tip: "Runs another script by name alongside this one. This script keeps going.",
     parts: ["run script named", inputOf("TEXT", "String"), "and keep going"],
     defaults: { TEXT: txt("myScript") },
-    code: block => `RunScript ${valueOf(block, "TEXT")}\n`
+    code: block => `RunScript ${scriptName(block, "TEXT")}\n`
   });
 
   def({
@@ -1825,7 +1857,7 @@
     tip: "Runs another script by name and pauses this one until it finishes.",
     parts: ["run script named", inputOf("TEXT", "String"), "and wait until it finishes"],
     defaults: { TEXT: txt("myScript") },
-    code: block => `RunScriptAndWait ${valueOf(block, "TEXT")}\n`
+    code: block => `RunScriptAndWait ${scriptName(block, "TEXT")}\n`
   });
 
   def({
@@ -2085,11 +2117,11 @@
   def({
     id: "ser_lib_crole_event", cat: "libraries", kind: "hat", icon: "f0c0", title: "Library: When a custom role spawns or is removed",
     tip: "Runs the blocks inside when a player gets or loses a custom role.",
-    note: "Leave the role blank to run it for every custom role. Inside, @player and *evCRole are the player and their role.",
-    parts: ["when a custom role", dd("EVENT", [["spawns", "spawned"], ["is removed", "removed"]]), "for role", tf("ID", ""), "do", { body: "DO" }],
+    note: "Leave the role blank to run it for every custom role. Inside, @evPlayer and *evCRole are the player and their role.",
+    parts: ["when a custom role", dd("EVENT", [["spawns", "Spawned"], ["is removed", "Removed"]]), "for role", tf("ID", ""), "do", { body: "DO" }],
     code: (block, g) => {
       const id = cleanName(block.getFieldValue("ID"), "");
-      return `!-- OnCRole ${block.getFieldValue("EVENT")}\n${id ? `-- forRoles ${id}\n` : ""}\n${unindent(g.statementToCode(block, "DO"))}`;
+      return `!-- OnCRole ${block.getFieldValue("EVENT")}\n${id ? `-- forRoles ${id}\n` : ""}\n${scopedWarnings(usedTargets(block), hatVariables(block))}${unindent(g.statementToCode(block, "DO"))}`;
     }
   });
 
@@ -2127,7 +2159,7 @@
     tip: "Runs the blocks inside when an UncomplicatedCustomRoles event happens.",
     note: "Needs that plugin installed.",
     parts: ["when UCR", dd("EVENT", asOptions(ucrEvents)), "happens, do", { body: "DO" }],
-    code: (block, g) => `!-- OnUCR ${block.getFieldValue("EVENT")}\n\n${unindent(g.statementToCode(block, "DO"))}`
+    code: (block, g) => `!-- OnUCR ${block.getFieldValue("EVENT")}\n\n${scopedWarnings(usedTargets(block), hatVariables(block))}${unindent(g.statementToCode(block, "DO"))}`
   });
 
     def({
@@ -2153,7 +2185,7 @@
         const c = gen.valueToCode(block, `COND${i}`, gen.ORDER_NONE);
         if (c) parts.push(`(${c})`);
       }
-      if (!parts.length) return [mode === "all" ? "true" : "false", gen.ORDER_ATOMIC];
+      if (!parts.length) return ["false", gen.ORDER_ATOMIC];
       return [parts.join(` ${op} `), gen.ORDER_NONE];
     },
     custom: "logic_group"
@@ -2164,42 +2196,47 @@
 
     // ===== Condition unfolding helpers (nested AND/OR) =====
   let condFlagCounter = 0;
-  const nextCondFlag = () => `__ser_cond${++condFlagCounter}`;
+  const nextCondFlag = () => `serCond${++condFlagCounter}`;
   const indentMultiline = text =>
     text ? text.split("\n").map(line => (line ? indent + line : line)).join("\n") : "";
 
+  function ensureLine(code) {
+    return code && !code.endsWith("\n") ? `${code}\n` : code;
+  }
+
   function emitCondition(condBlock, thenCode, elseCode) {
-    if (!condBlock) return thenCode;
-    if (condBlock.type === "ser_logic_group") {
-      return emitLogicGroup(condBlock, thenCode, elseCode);
-    }
+    if (!condBlock) return "";
+    if (condBlock.type === "ser_logic_group") return emitLogicGroup(condBlock, thenCode, elseCode);
     const generated = gen.blockToCode(condBlock);
     const condExpr = Array.isArray(generated) ? generated[0] : generated;
-    return `if ${condExpr || "..."}\n${indentMultiline(thenCode)}${elseCode ? `else\n${indentMultiline(elseCode)}` : ""}end\n`;
+    return `if ${condExpr || "..."}\n${indentMultiline(ensureLine(thenCode))}${elseCode ? `else\n${indentMultiline(ensureLine(elseCode))}` : ""}end\n`;
+  }
+
+  function computeFlag(conds, mode, flagVar) {
+    if (!conds.length) return `${flagVar} = false\n`;
+    const anyMode = mode === "any";
+    let code = `${flagVar} = ${anyMode ? "false" : "true"}\n`;
+    for (const cond of conds) {
+      code += anyMode
+        ? `if ${flagVar} is false\n${indentMultiline(emitCondition(cond, `${flagVar} = true`, ""))}end\n`
+        : `if ${flagVar}\n${indentMultiline(emitCondition(cond, "", `${flagVar} = false`))}end\n`;
+    }
+    return code;
+  }
+
+  function groupConds(groupBlock) {
+    const conds = [];
+    for (let i = 0; i < (groupBlock.serCount || 1); i++) {
+      const cond = groupBlock.getInputTargetBlock(`COND${i}`);
+      if (cond) conds.push(cond);
+    }
+    return conds;
   }
 
   function emitLogicGroup(groupBlock, thenCode, elseCode) {
-    const mode = groupBlock.serMode || "all";
-    const count = groupBlock.serCount || 1;
-    const subs = [];
-    for (let i = 0; i < count; i++) subs.push(groupBlock.getInputTargetBlock(`COND${i}`));
     const flagVar = `$${nextCondFlag()}`;
-    let code = "";
-    if (mode === "any") {
-      code += `${flagVar} = false\n`;
-      for (const sub of subs) {
-        const inner = emitCondition(sub, `${flagVar} = true`, "");
-        code += `if ${flagVar} is false\n${indentMultiline(inner)}end\n`;
-      }
-    } else {
-      code += `${flagVar} = true\n`;
-      for (const sub of subs) {
-        const inner = emitCondition(sub, "", `${flagVar} = false`);
-        code += `if ${flagVar}\n${indentMultiline(inner)}end\n`;
-      }
-    }
-    code += `if ${flagVar}\n${indentMultiline(thenCode)}${elseCode ? `else\n${indentMultiline(elseCode)}` : ""}end\n`;
-    return code;
+    return computeFlag(groupConds(groupBlock), groupBlock.serMode || "all", flagVar)
+      + `if ${flagVar}\n${indentMultiline(ensureLine(thenCode))}${elseCode ? `else\n${indentMultiline(ensureLine(elseCode))}` : ""}end\n`;
   }
 
   // ===== If block =====
